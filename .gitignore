@@ -1,0 +1,14 @@
+# Visual Studio user settings and caches
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build and test output
+[Bb]in/
+[Oo]bj/
+TestResults/
+
+# Temporary Office files
+~$*

@@ -1,0 +1,222 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="SmartHome.Room">
+    <Position X="0.75" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAACAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\Room.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.LogEntry">
+    <Position X="2.5" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAQA=</HashCode>
+      <FileName>Models\LogEntry.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.ControllerNode">
+    <Position X="4.25" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAACAAAQAAACAAAAACQAAAAAAAAA=</HashCode>
+      <FileName>Models\ControllerNode.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.User">
+    <Position X="6" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAACAAAAAABAAAAAEAAAAAAAAAAAAAAAAAAQAAAAAAA=</HashCode>
+      <FileName>Models\User.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.Device">
+    <Position X="0.75" Y="6" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ABACAAAEAAAAAAAAABAAAAQAAAAAAAAAQAAAAAEAAAA=</HashCode>
+      <FileName>Models\Device.cs</FileName>
+    </TypeIdentifier>
+    <ShowAsAssociation>
+      <Property Name="Room" />
+      <Property Name="Node" />
+    </ShowAsAssociation>
+  </Class>
+  <Class Name="SmartHome.Light">
+    <Position X="3.5" Y="6" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAIA=</HashCode>
+      <FileName>Models\Light.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.SmartSocket">
+    <Position X="3.5" Y="8" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\SmartSocket.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.Heater">
+    <Position X="3.5" Y="9.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\Heater.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.Servo">
+    <Position X="3.5" Y="10.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAA=</HashCode>
+      <FileName>Models\Servo.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.Sensor">
+    <Position X="1.5" Y="11.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAIAAAAAAAAAAAAAQAAAAgAAEAAAA=</HashCode>
+      <FileName>Models\Sensor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.TemperatureSensor">
+    <Position X="4" Y="13" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\TemperatureSensor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.HumiditySensor">
+    <Position X="4" Y="14.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\HumiditySensor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.SmokeSensor">
+    <Position X="4" Y="15.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\SmokeSensor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.MotionSensor">
+    <Position X="0.5" Y="14.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\MotionSensor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.LeakSensor">
+    <Position X="0.5" Y="15.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\LeakSensor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.DoorSensor">
+    <Position X="2.25" Y="15.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\DoorSensor.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.Trigger">
+    <Position X="6" Y="6" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAACAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\Trigger.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.ScenarioAction">
+    <Position X="6" Y="8" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAABAAAAAAAAAABAAAAIAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\ScenarioAction.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.Scenario">
+    <Position X="6" Y="10.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAACAAAAIAAAABQAAAEAAAQAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\Scenario.cs</FileName>
+    </TypeIdentifier>
+    <ShowAsAssociation>
+      <Property Name="Trigger" />
+    </ShowAsAssociation>
+    <ShowAsCollectionAssociation>
+      <Property Name="Actions" />
+    </ShowAsCollectionAssociation>
+  </Class>
+  <Class Name="SmartHome.CommandValidator">
+    <Position X="8" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Services\CommandValidator.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.NotificationService">
+    <Position X="8" Y="4.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAI=</HashCode>
+      <FileName>Services\NotificationService.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.DiscoveryService">
+    <Position X="8" Y="6.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAA=</HashCode>
+      <FileName>Services\DiscoveryService.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.DeviceRepository">
+    <Position X="8" Y="7.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAYAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAgAAA=</HashCode>
+      <FileName>Data\DeviceRepository.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SmartHome.SmartHomeSystem">
+    <Position X="10.25" Y="3.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAACAAAKECAgAABAAAAACAQAgAAAAQAACEAIAAEAI=</HashCode>
+      <FileName>Services\SmartHomeSystem.cs</FileName>
+    </TypeIdentifier>
+    <ShowAsAssociation>
+      <Field Name="discovery" />
+      <Field Name="notifier" />
+      <Field Name="repository" />
+      <Field Name="validator" />
+    </ShowAsAssociation>
+    <ShowAsCollectionAssociation>
+      <Property Name="Devices" />
+      <Property Name="Scenarios" />
+      <Property Name="Users" />
+      <Property Name="Log" />
+    </ShowAsCollectionAssociation>
+  </Class>
+  <Enum Name="SmartHome.DeviceStatus">
+    <Position X="1" Y="1.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAACAAAAAAAAAAAAAgAAAAAAAAIAAAgAABAAAAAAAA=</HashCode>
+      <FileName>Models\DeviceStatus.cs</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Enum Name="SmartHome.SystemMode">
+    <Position X="2.75" Y="1.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAABAAAAAAAAAAAAAIAAAAAAAAAQAAAAA=</HashCode>
+      <FileName>Models\SystemMode.cs</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Enum Name="SmartHome.UserRole">
+    <Position X="6.25" Y="1.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAQAAAQAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Models\UserRole.cs</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Enum Name="SmartHome.NodeType">
+    <Position X="4.5" Y="1.25" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAQAAAQAA=</HashCode>
+      <FileName>Models\NodeType.cs</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>
