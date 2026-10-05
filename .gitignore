@@ -12,3 +12,6 @@ TestResults/
 
 # Temporary Office files
 ~$*
+# Local Android Studio and Gradle files
+/.gradle/
+/.idea/
