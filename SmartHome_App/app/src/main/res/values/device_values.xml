@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Отсутствие показаний -->
+    <string name="device_value_no_data">Нет данных</string>
+    <!-- Числовые показания -->
+    <string name="device_water_level_percent">%1$d %%</string>
+    <string name="device_temperature_celsius">%1$.2f °C</string>
+    <string name="device_brightness_percent">%1$d %%</string>
+    <string name="device_light_temperature_percent">%1$d %%</string>
+    <!-- Положение клапана -->
+    <string name="device_valve_open">Открыт</string>
+    <string name="device_valve_closed">Закрыт</string>
+    <!-- Доступность устройства -->
+    <string name="device_online">В сети</string>
+    <string name="device_offline">Не в сети</string>
+    <!-- Состояние нагрузки -->
+    <string name="device_power_on">Включено</string>
+    <string name="device_power_off">Выключено</string>
+
+    <string name="device_updated_just_now">Только что</string>
+</resources>

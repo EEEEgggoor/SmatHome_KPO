@@ -47,6 +47,7 @@ public class WaterDevice extends Device
             throw new IllegalArgumentException("Статус уровня воды не должен быть null.");
         }
         String trimmed_levelStatus = levelStatus.trim();
+
         if (trimmed_levelStatus.isEmpty()){
             throw new IllegalArgumentException("Статус уровня воды не должен быть пустым.");
         }
