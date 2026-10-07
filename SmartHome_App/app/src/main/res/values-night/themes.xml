@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.SmartHome" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+    <!-- Светлая тема Haven и в ночном режиме. Тёмный вариант в макете не используется. -->
+    <style name="Base.Theme.SmartHome" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/haven_primary</item>
+        <item name="android:windowBackground">@color/haven_background</item>
     </style>
 </resources>

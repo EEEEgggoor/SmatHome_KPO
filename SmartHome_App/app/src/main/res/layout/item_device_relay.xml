@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardBackgroundColor="@color/haven_card"
+    app:cardCornerRadius="@dimen/haven_card_radius"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/haven_stroke"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/haven_card_padding">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ImageView
+                android:id="@+id/imageDeviceIcon"
+                android:layout_width="@dimen/haven_icon_box"
+                android:layout_height="@dimen/haven_icon_box"
+                android:background="@drawable/bg_icon_relay"
+                android:contentDescription="@null"
+                android:padding="10dp"
+                android:src="@drawable/ic_relay"
+                app:tint="@color/haven_icon_relay_fg" />
+
+            <ImageButton
+                android:id="@+id/buttonDeviceMenu"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_alignParentEnd="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/haven_device_menu"
+                android:src="@drawable/ic_more_vert"
+                app:tint="@color/haven_muted" />
+        </RelativeLayout>
+
+        <TextView
+            android:id="@+id/textDeviceName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/haven_ink"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textDeviceSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/haven_muted"
+            android:textSize="12sp" />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp">
+
+            <TextView
+                android:id="@+id/textDeviceStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:drawablePadding="6dp"
+                android:gravity="center_vertical"
+                android:textColor="@color/haven_primary"
+                android:textSize="12sp"
+                app:drawableStartCompat="@drawable/bg_status_dot" />
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchRelay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:clickable="false"
+                android:contentDescription="@string/haven_relay_switch"
+                android:focusable="false" />
+        </RelativeLayout>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

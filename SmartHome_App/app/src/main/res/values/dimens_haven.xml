@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="haven_screen_padding">20dp</dimen>
+    <dimen name="haven_card_radius">16dp</dimen>
+    <dimen name="haven_card_padding">16dp</dimen>
+    <dimen name="haven_icon_box">40dp</dimen>
+    <dimen name="haven_text_title">28sp</dimen>
+    <dimen name="haven_text_value">26sp</dimen>
+</resources>

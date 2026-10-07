@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="haven_primary">#148A62</color>
+    <color name="haven_primary_light">#DDF2EA</color>
+    <color name="haven_ink">#1B2430</color>
+    <color name="haven_muted">#6B7685</color>
+    <color name="haven_background">#F3F5F8</color>
+    <color name="haven_card">#FFFFFF</color>
+    <color name="haven_stroke">#E1E5EB</color>
+    <color name="haven_icon_light_bg">#FFF0C2</color>
+    <color name="haven_icon_light_fg">#C98A00</color>
+    <color name="haven_icon_relay_bg">#DCEBFA</color>
+    <color name="haven_icon_relay_fg">#2F6FB0</color>
+    <color name="haven_icon_water_bg">#DDF1F6</color>
+    <color name="haven_icon_water_fg">#2A8AA3</color>
+    <color name="haven_status_off">#8A94A3</color>
+    <color name="haven_status_stale">#C98A00</color>
+    <color name="haven_status_error">#C0392B</color>
+</resources>
