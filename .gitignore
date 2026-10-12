@@ -15,3 +15,14 @@ TestResults/
 # Local Android Studio and Gradle files
 /.gradle/
 /.idea/
+# Documentation stays local; do not publish it to this repository
+Docs/
+docs/
+AGENTS.md
+*.md
+*.doc
+*.docx
+*.pdf
+*.drawio
+*.puml
+*.cd
