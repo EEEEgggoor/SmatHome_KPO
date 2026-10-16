@@ -27,5 +27,5 @@ public interface RoomDao {
     int update(@NonNull RoomEntity room);
 
     @Query("DELETE FROM rooms WHERE id = :roomId")
-    int deleteByID(int roomId);
+    int deleteById(int roomId);
 }
