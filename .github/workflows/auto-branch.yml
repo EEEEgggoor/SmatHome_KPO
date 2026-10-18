@@ -2,18 +2,59 @@ name: Create Issue Branch
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, labeled]
 
 permissions:
   contents: write
   issues: write
-  pull-requests: write
 
 jobs:
   create_branch:
     runs-on: ubuntu-latest
     steps:
-      - name: Create Issue Branch
-        uses: robvanderleek/create-issue-branch@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create branch from label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const labels = issue.labels.map(l => l.name);
+
+            // 1. Выбираем исходную ветку по тегу
+            let sourceBranch = '';
+            if (labels.includes('APP')) {
+              sourceBranch = 'SmartHome_App';
+            } else if (labels.includes('ESP')) {
+              sourceBranch = 'SmartHome_ESP';
+            } else {
+              console.log('Нет тегов APP или ESP — пропускаем создание ветки.');
+              return;
+            }
+
+            // 2. Формируем имя новой ветки из заголовка задачи и её номера
+            // Заменяем пробелы и недопустимые для Git символы на дефис
+            const cleanTitle = issue.title.trim().replace(/[\s~^:?*[\]\\]+/g, '-');
+            const newBranchName = `${cleanTitle}-${issue.number}`;
+
+            // 3. Получаем последний коммит (SHA) исходной ветки
+            const { data: refData } = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `heads/${sourceBranch}`
+            });
+
+            // 4. Создаём новую ветку от исходной
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${newBranchName}`,
+                sha: refData.object.sha
+              });
+              console.log(`Ветка ${newBranchName} успешно создана от ${sourceBranch}`);
+            } catch (e) {
+              if (e.status === 422) {
+                console.log(`Ветка ${newBranchName} уже существует.`);
+              } else {
+                throw e;
+              }
+            }
