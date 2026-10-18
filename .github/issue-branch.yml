@@ -1,0 +1,21 @@
+# Имя создаваемой ветки будет браться напрямую из названия задачи + её номер
+# Например, если задача называется "FEAT_Login_Screen" (и её номер #5),
+# то создастся ветка: FEAT_Login_Screen-5
+branchName: '${issue.title}-${issue.number}'
+
+
+# Автоматически привязывать ветку к Issue в блоке Development
+autoLinkIssue: true
+
+branches:
+  # Если на задаче стоит тег APP -> отпочковываем от SmartHome_App
+  - label: 'APP'
+    name: 'SmartHome_App'
+
+  # Если на задаче стоит тег ESP -> отпочковываем от SmartHome_ESP
+  - label: 'ESP'
+    name: 'SmartHome_ESP'
+
+  # Если нет ни тега APP, ни тега ESP -> ничего не создаём
+  - label: '*'
+    skip: true
