@@ -14,6 +14,9 @@
 #include "esp_wifi.h"
 #include "esp_wifi_default.h"
 
+#include "nvs.h"
+#include "nvs_flash.h"
+
 #define MAX_RETRY 10
 #define WIFI_CONNBIT BIT0
 #define WIFI_FAIL_BIT BIT1
@@ -24,7 +27,6 @@ static const char *TAG_WIFI = "WIFI";
 
 static int s_retry_num = 0;
 static EventGroupHandle_t s_wifi_event_group = NULL;
-
 
 static void event_handler(
     void *arg,
@@ -103,7 +105,6 @@ static void event_handler(
     }
 }
 
-
 esp_err_t wifi_init(
     const char *wifi_ssid,
     const char *wifi_pass)
@@ -114,7 +115,6 @@ esp_err_t wifi_init(
         ESP_LOGE(TAG_WIFI, "NULL credentials");
         return ESP_ERR_INVALID_ARG;
     }
-
 
     size_t ssid_len = strlen(wifi_ssid);
     size_t pass_len = strlen(wifi_pass);
@@ -153,12 +153,10 @@ esp_err_t wifi_init(
         return ESP_FAIL;
     }
 
-
     wifi_init_config_t wifi_conf =
         WIFI_INIT_CONFIG_DEFAULT();
 
     ESP_ERROR_CHECK(esp_wifi_init(&wifi_conf));
-
 
     esp_event_handler_instance_t inst_any_id;
     esp_event_handler_instance_t inst_got_ip;
@@ -179,7 +177,6 @@ esp_err_t wifi_init(
             NULL,
             &inst_got_ip));
 
-
     wifi_config_t wifi_config = {0};
 
     memcpy(
@@ -198,9 +195,25 @@ esp_err_t wifi_init(
     wifi_config.sta.pmf_cfg.capable = true;
     wifi_config.sta.pmf_cfg.required = false;
 
+    nvs_handle_t handle;
 
-    ESP_ERROR_CHECK(
-        esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    esp_err_t err = nvs_open("wifi_cfg",
+                            NVS_READWRITE,
+                            &handle);
+
+    err = nvs_set_str(handle, "ssid", wifi_ssid);
+
+    if (err == ESP_OK)
+    {
+        err = nvs_set_str(handle, "pass", wifi_pass);
+    }
+
+    if (err == ESP_OK)
+    {
+        nvs_commit(&handle);
+    }
+
+    nvs_close(&handle);
 
     ESP_ERROR_CHECK(
         esp_wifi_set_mode(WIFI_MODE_STA));
@@ -210,13 +223,11 @@ esp_err_t wifi_init(
             WIFI_IF_STA,
             &wifi_config));
 
-
     s_retry_num = 0;
 
     ESP_LOGI(TAG_WIFI, "Starting Wi-Fi...");
 
     ESP_ERROR_CHECK(esp_wifi_start());
-
 
     EventBits_t bits = xEventGroupWaitBits(
         s_wifi_event_group,

@@ -187,6 +187,7 @@ Desktop.ini
 *.yml
 *.lock
 .clangd
+*.properties
 
 /build
 build/
