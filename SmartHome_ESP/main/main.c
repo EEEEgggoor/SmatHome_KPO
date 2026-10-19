@@ -15,11 +15,11 @@
 #include "usb_line_parser.h"
 #include "_WiFi.h"
 #include "storage.h"
+#include "tcp_service.h"
+#include "SH_mDns.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 
-#include "lwip/sockets.h"
-#include "lwip/inet.h"
 
 #define WIFI_SSID_BUFFER_SIZE 33
 #define WIFI_PASS_BUFFER_SIZE 64
@@ -225,6 +225,25 @@ void app_main(void)
     {
         ESP_LOGW(TAG, "Device record missing or invalid, creating default");
 
+        s_device = (Device){
+            .type = DEVICE_TYPE_WATER,
+            .id = 0,
+            .room_id = 0,
+            .name = "Water Controller",
+            .controller_id = "ESP32-S2-001",
+            .online = false,
+            .data.water = {
+                .power_on = false,
+                .water_level = 0}};
+
+        dev_result = stor_save(&s_device);
+        if (dev_result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to save default device: %s",
+                     esp_err_to_name(dev_result));
+            return;
+        }
+
         ESP_LOGI(TAG, "Default Device saved");
     }
     else
@@ -261,6 +280,20 @@ void app_main(void)
 
         wifi_result = wifi_init(wifi_ssid, wifi_pass);
     }
+
+    s_device.online = true;
+    esp_err_t tcp_result = tcp_service_start(&s_device);
+    if (tcp_result != ESP_OK)
+    {
+        ESP_LOGE(TAG, "TCP service failed: %s", esp_err_to_name(tcp_result));
+        if (tud_cdc_connected())
+        {
+            tud_cdc_write_str("SERVICE_FAILED\n");
+            tud_cdc_write_flush();
+        }
+        return;
+    }
+    start_mdns_service();
 
     if (tud_cdc_connected())
     {

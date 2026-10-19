@@ -6,6 +6,7 @@ idf_component_register(
         "usb_line_parser.c"
         "storage.c"
         "SH_mDns.c"
+        "tcp_service.c"
 
     INCLUDE_DIRS
         "."
@@ -16,4 +17,5 @@ idf_component_register(
         esp_event
         nvs_flash
         esp_tinyusb
+        lwip
 )

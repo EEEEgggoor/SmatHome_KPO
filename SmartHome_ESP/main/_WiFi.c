@@ -18,7 +18,6 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#include "SH_mDns.h"
 
 #define MAX_RETRY 10
 #define WIFI_CONNBIT BIT0
@@ -108,7 +107,6 @@ static void event_handler(
 
         s_retry_num = 0;
 
-        start_mdns_service();
 
 
         xEventGroupClearBits(
