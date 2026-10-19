@@ -22,6 +22,9 @@ typedef struct {
 
 
 typedef struct {
+
+    DeviceType type;
+    
     int32_t id;                 // Идентификатор устройства в БД
     int32_t room_id;            // ID комнаты, к которой привязано устройство
     char name[32];              // Название устройства (null-terminated строка)
