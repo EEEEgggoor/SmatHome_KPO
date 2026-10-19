@@ -401,16 +401,18 @@ public class HomeRepository {
             }
 
             if (hasAnyReading){
-                if (waterLevel == null
-                        || temperature == null
-                        || levelStatus == null
-                        || lastUpdate == null)
+                boolean levelOnly = waterLevel != null && temperature == null
+                        && levelStatus == null && lastUpdate == null;
+                boolean complete = waterLevel != null && temperature != null
+                        && levelStatus != null && lastUpdate != null;
+                if (!levelOnly && !complete)
                 {
                     throw new IllegalStateException(
                             "В записи водяного устройства неполный набор показаний."
                     );
                 }
-                water.updateReading(waterLevel,temperature,levelStatus,lastUpdate);
+                if (levelOnly) water.updateLevelOnly(waterLevel);
+                else water.updateReading(waterLevel,temperature,levelStatus,lastUpdate);
             }
 
             if (valveOpen != null){
@@ -861,14 +863,14 @@ public class HomeRepository {
 
                             if (hasAnyReading)
                             {
-                                if (waterLevel == null
-                                        || temperature == null
-                                        || levelStatus == null
-                                        || lastUpdate == null)
+                                boolean levelOnly = waterLevel != null && temperature == null
+                                        && levelStatus == null && lastUpdate == null;
+                                boolean complete = waterLevel != null && temperature != null
+                                        && levelStatus != null && lastUpdate != null;
+                                if (!levelOnly && !complete)
                                 {
                                     throw new IllegalArgumentException(
-                                            "Показания воды нужно передать полностью "
-                                                    + "или оставить все неизвестными."
+                                            "Передайте уровень либо полный пакет показаний воды."
                                     );
                                 }
                             }
@@ -925,7 +927,11 @@ public class HomeRepository {
                                     entity.isOnline()
                             );
 
-                            if (waterLevel != null
+                            if (waterLevel != null && temperature == null)
+                            {
+                                water.updateLevelOnly(waterLevel);
+                            }
+                            else if (waterLevel != null
                                     && temperature != null
                                     && levelStatus != null
                                     && lastUpdate != null)
@@ -1474,13 +1480,14 @@ public class HomeRepository {
 
                             if (hasAnyReading)
                             {
-                                if (waterLevel == null
-                                        || temperature == null
-                                        || levelStatus == null
-                                        || lastUpdate == null)
+                                boolean levelOnly = waterLevel != null && temperature == null
+                                        && levelStatus == null && lastUpdate == null;
+                                boolean complete = waterLevel != null && temperature != null
+                                        && levelStatus != null && lastUpdate != null;
+                                if (!levelOnly && !complete)
                                 {
                                     throw new IllegalArgumentException(
-                                            "Новые показания воды нужно передать полным пакетом."
+                                            "Передайте уровень либо полный пакет показаний воды."
                                     );
                                 }
 

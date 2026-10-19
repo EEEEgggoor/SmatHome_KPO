@@ -8,6 +8,7 @@ import com.example.smarthome.model.Device;
 import com.example.smarthome.model.LightDevice;
 import com.example.smarthome.model.RelayDevice;
 import com.example.smarthome.model.WaterDevice;
+import java.util.List;
 
 /**
  * Контракт связи приложения с контроллерами.
@@ -20,6 +21,45 @@ import com.example.smarthome.model.WaterDevice;
  */
 public interface ControllerGateway
 {
+    /** Find controllers already connected to the same local Wi-Fi network. */
+    @MainThread
+    @NonNull
+    default ConnectionAttempt scanDevices(@NonNull ScanCallback callback)
+    {
+        callback.onError(new UnsupportedOperationException("Поиск в Wi-Fi не поддерживается."));
+        return () -> { };
+    }
+
+    /** Read a selected controller before adding it, without sending Wi-Fi credentials. */
+    @MainThread
+    @NonNull
+    default ConnectionAttempt connectDiscoveredDevice(long requestId,
+            @NonNull String controllerId, @NonNull ConnectionCallback callback)
+    {
+        callback.onError(requestId, new UnsupportedOperationException("Подключение через Wi-Fi не поддерживается."));
+        return () -> { };
+    }
+
+    final class DiscoveredDevice
+    {
+        public final String controllerId;
+        public final int type;
+        public final String address;
+
+        public DiscoveredDevice(@NonNull String controllerId, int type, @NonNull String address)
+        {
+            this.controllerId = controllerId;
+            this.type = type;
+            this.address = address;
+        }
+    }
+
+    interface ScanCallback
+    {
+        @MainThread void onSuccess(@NonNull List<DiscoveredDevice> devices);
+        @MainThread void onError(@NonNull Exception error);
+    }
+
     /**
      * Запросить состояние существующего устройства.
      * Результат должен иметь тот же тип и идентификаторы.

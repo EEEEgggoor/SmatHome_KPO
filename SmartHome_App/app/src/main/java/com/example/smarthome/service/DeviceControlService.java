@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -240,7 +241,8 @@ public class DeviceControlService
         checkWaterReadings(level, temperature, status, time);
         if (level != null)
         {
-            result.updateReading(level, temperature, status, time);
+            if (temperature == null) result.updateLevelOnly(level);
+            else result.updateReading(level, temperature, status, time);
         }
         if (source.getValveOpen() != null)
         {
@@ -253,6 +255,11 @@ public class DeviceControlService
     {
         if (level == null && temperature == null && status == null && time == null)
         {
+            return;
+        }
+        if (level != null && temperature == null && status == null && time == null)
+        {
+            checkPercentage(level, "Уровень воды");
             return;
         }
         if (level == null || temperature == null || status == null || time == null)
@@ -1072,8 +1079,92 @@ public class DeviceControlService
         }
         request.roomId = roomId;
         activeConnection = request;
-        request.start(ssid, password);
+        request.start(ssid, password, null);
         return request;
+    }
+
+    /** Finds ESP controllers on the current Wi-Fi network that are absent from the database. */
+    @MainThread
+    @NonNull
+    public ControllerGateway.ConnectionAttempt scanUnpairedDevices(@NonNull ScanCallback callback)
+    {
+        checkMainThread();
+        if (callback == null) throw new IllegalArgumentException("Обработчик поиска не должен быть null.");
+        AtomicBoolean cancelled = new AtomicBoolean();
+        final ControllerGateway.ConnectionAttempt transport;
+        try
+        {
+            transport = gateway.scanDevices(new ControllerGateway.ScanCallback()
+            {
+                @Override public void onSuccess(@NonNull List<ControllerGateway.DiscoveredDevice> found)
+                {
+                    if (cancelled.get()) return;
+                    repository.getDevices(new RepositoryCallback<List<Device>>()
+                    {
+                        @Override public void onSuccess(@NonNull List<Device> saved)
+                        {
+                            if (!cancelled.get()) callback.onSuccess(DiscoveryFilter.unpaired(found, saved));
+                        }
+
+                        @Override public void onError(@NonNull Exception error)
+                        {
+                            if (!cancelled.get()) callback.onError(error);
+                        }
+                    });
+                }
+
+                @Override public void onError(@NonNull Exception error)
+                {
+                    if (!cancelled.get()) callback.onError(error);
+                }
+            });
+        }
+        catch (RuntimeException error)
+        {
+            mainHandler.post(() -> { if (!cancelled.get()) callback.onError(error); });
+            return () -> cancelled.set(true);
+        }
+        return () -> {
+            cancelled.set(true);
+            if (transport != null) transport.cancel();
+        };
+    }
+
+    /** Adds an ESP that already has Wi-Fi credentials; no USB access is needed. */
+    @MainThread
+    @NonNull
+    public ControllerGateway.ConnectionAttempt addDiscoveredDevice(@NonNull String name, int roomId,
+            @NonNull String controllerId, @NonNull ConnectionCallback callback)
+    {
+        checkMainThread();
+        if (callback == null) throw new IllegalArgumentException("Обработчик подключения не должен быть null.");
+        ConnectRequest request = new ConnectRequest(callback);
+        if (activeConnection != null)
+        {
+            request.fail(new IllegalStateException("Другое подключение ещё не завершено."));
+            return request;
+        }
+        try
+        {
+            request.name = checkText(name, "Название устройства");
+            if (roomId <= 0) throw new IllegalArgumentException("Идентификатор комнаты должен быть положительным.");
+            controllerId = checkText(controllerId, "Идентификатор контроллера");
+        }
+        catch (RuntimeException error)
+        {
+            request.fail(error);
+            return request;
+        }
+        request.roomId = roomId;
+        activeConnection = request;
+        request.start(null, null, controllerId);
+        return request;
+    }
+
+    public interface ScanCallback
+    {
+        @MainThread void onSuccess(@NonNull List<ControllerGateway.DiscoveredDevice> devices);
+        @MainThread void onError(@NonNull Exception error);
     }
 
     /** Подтверждённые данные до назначения id базой. SSID/пароль здесь не хранятся. */
@@ -1165,6 +1256,7 @@ public class DeviceControlService
         private String name;
         private int roomId;
         private boolean waiting = true;
+        private boolean checkingDuplicate;
         private boolean finished;
         private boolean cancelled;
 
@@ -1173,7 +1265,7 @@ public class DeviceControlService
             this.callback = callback;
         }
 
-        void start(final String ssid, final String password)
+        void start(final String ssid, final String password, final String controllerId)
         {
             mainHandler.postDelayed(this, connectionTimeoutMillis);
             try
@@ -1203,7 +1295,9 @@ public class DeviceControlService
                         }
                         try
                         {
-                            attempt = gateway.connectDevice(requestId, ssid, password, ConnectRequest.this);
+                            attempt = controllerId == null
+                                    ? gateway.connectDevice(requestId, ssid, password, ConnectRequest.this)
+                                    : gateway.connectDiscoveredDevice(requestId, controllerId, ConnectRequest.this);
                             if (attempt == null && waiting && !finished)
                             {
                                 fail(new IllegalStateException("Gateway не вернул объект подключения."));
@@ -1238,7 +1332,7 @@ public class DeviceControlService
         boolean accept(long responseId)
         {
             checkMainThread();
-            if (!waiting || finished || cancelled)
+            if (!waiting || checkingDuplicate || finished || cancelled)
             {
                 return false;
             }
@@ -1345,6 +1439,36 @@ public class DeviceControlService
         }
 
         void save(final ConnectionInfo info)
+        {
+            checkingDuplicate = true;
+            try
+            {
+                repository.getDevices(new RepositoryCallback<List<Device>>()
+                {
+                    @Override public void onSuccess(@NonNull List<Device> saved)
+                    {
+                        if (!waiting || finished || cancelled) return;
+                        if (DiscoveryFilter.isPaired(info.controllerId, saved))
+                        {
+                            fail(new IllegalStateException("Это устройство уже добавлено в приложение."));
+                            return;
+                        }
+                        saveConfirmed(info);
+                    }
+
+                    @Override public void onError(@NonNull Exception error)
+                    {
+                        fail(error);
+                    }
+                });
+            }
+            catch (RuntimeException error)
+            {
+                fail(error);
+            }
+        }
+
+        void saveConfirmed(final ConnectionInfo info)
         {
             waiting = false;
             mainHandler.removeCallbacks(this);

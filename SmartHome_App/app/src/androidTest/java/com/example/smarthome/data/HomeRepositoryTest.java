@@ -560,6 +560,7 @@ public class HomeRepositoryTest
         );
 
         invalidWater.setWaterLevel(50);
+        invalidWater.setTemperature(22.0);
         deviceDao.insert(invalidWater);
 
         TestCallback<List<Device>> callback =
@@ -779,6 +780,25 @@ public class HomeRepositoryTest
         }
 
         assertEquals(3, deviceDao.getAll().size());
+    }
+
+    @Test
+    public void addWaterDevice_levelOnlyFromEsp_persistsWithoutInventingOtherMeasurements()
+            throws InterruptedException
+    {
+        int roomId = insertRoom("Кухня");
+        TestCallback<WaterDevice> callback = new TestCallback<WaterDevice>();
+        repository.addWaterDevice("Бак", roomId, "ESP32-S2-001", true,
+                63, null, null, null, null, callback);
+
+        WaterDevice water = callback.awaitSuccess();
+        assertEquals(Integer.valueOf(63), water.getWaterLevel());
+        assertNull(water.getTemperature());
+        assertNull(water.getLevelStatus());
+        assertNull(water.getLastUpdate());
+        DeviceEntity saved = deviceDao.getById(water.getId());
+        assertEquals(Integer.valueOf(63), saved.getWaterLevel());
+        assertNull(saved.getTemperature());
     }
 
     @Test
@@ -1185,6 +1205,7 @@ public class HomeRepositoryTest
 
         // Создаём неполный пакет напрямую через DAO.
         entity.setWaterLevel(64);
+        entity.setTemperature(22.0);
 
         int deviceId = checkedId(deviceDao.insert(entity));
 
@@ -1201,7 +1222,7 @@ public class HomeRepositoryTest
         assertNotNull(saved);
         assertEquals("Бак", saved.getName());
         assertEquals(Integer.valueOf(64), saved.getWaterLevel());
-        assertNull(saved.getTemperature());
+        assertEquals(Double.valueOf(22.0), saved.getTemperature());
         assertNull(saved.getLevelStatus());
         assertNull(saved.getLastUpdate());
         assertEquals(1, deviceDao.getAll().size());

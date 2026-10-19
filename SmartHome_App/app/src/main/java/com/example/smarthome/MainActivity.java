@@ -1,6 +1,8 @@
 package com.example.smarthome;
 
 import android.content.DialogInterface;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.view.View;
@@ -18,14 +20,18 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.smarthome.model.Device;
+import com.example.smarthome.data.HomeRepository;
+import com.example.smarthome.data.RepositoryCallback;
+import com.example.smarthome.integration.ControllerGateway;
+import com.example.smarthome.service.DeviceControlService;
 import com.example.smarthome.model.LightDevice;
 import com.example.smarthome.model.RelayDevice;
 import com.example.smarthome.model.WaterDevice;
 import com.example.smarthome.model.Room;
-import com.example.smarthome.ui.DemoHomeData;
 import com.example.smarthome.ui.adapter.DeviceAdapter;
 import com.example.smarthome.ui.adapter.RoomAdapter;
 import com.example.smarthome.ui.dialog.LightControlDialog;
+import com.example.smarthome.ui.dialog.AddEspDeviceDialog;
 import com.example.smarthome.ui.dialog.NameInputDialog;
 import com.example.smarthome.ui.dialog.RelayControlDialog;
 import com.example.smarthome.ui.dialog.WaterControlDialog;
@@ -54,8 +60,11 @@ public class MainActivity extends AppCompatActivity
     private RecyclerView recyclerRooms;
     private RoomAdapter roomAdapter;
     private DeviceAdapter deviceAdapter;
+    private HomeRepository repository;
+    private DeviceControlService controlService;
+    private final Map<Integer, ControllerGateway.Subscription> subscriptions = new HashMap<>();
+    private boolean started;
 
-    // ВРЕМЕННО: данные из DemoHomeData. После появления HomeRepository брать их оттуда.
     private List<Room> rooms = new ArrayList<Room>();
     private List<Device> devices = new ArrayList<Device>();
 
@@ -65,6 +74,9 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+        SmartHomeApplication app = (SmartHomeApplication) getApplication();
+        repository = app.repository();
+        controlService = app.controlService();
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
@@ -84,14 +96,77 @@ public class MainActivity extends AppCompatActivity
         textGreeting = findViewById(R.id.textGreeting);
         textDevicesCount = findViewById(R.id.textDevicesCount);
 
-        rooms = DemoHomeData.createRooms();
-        devices = DemoHomeData.createDevices();
-
         setupRoomList();
         setupDeviceList();
         setupAddDeviceButton();
         showDateAndGreeting();
         refreshScreen();
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        started = true;
+        loadData();
+    }
+
+    @Override protected void onStop() {
+        started = false;
+        clearSubscriptions();
+        super.onStop();
+    }
+
+    private void loadData() {
+        repository.getRooms(new RepositoryCallback<List<Room>>() {
+            @Override public void onSuccess(List<Room> saved) {
+                if (!started) return;
+                rooms = saved;
+                refreshScreen();
+            }
+            @Override public void onError(Exception error) { showError(error); }
+        });
+        repository.getDevices(new RepositoryCallback<List<Device>>() {
+            @Override public void onSuccess(List<Device> saved) {
+                if (!started) return;
+                devices = saved;
+                refreshScreen();
+                clearSubscriptions();
+                for (Device device : devices) observeDevice(device);
+            }
+            @Override public void onError(Exception error) { showError(error); }
+        });
+    }
+
+    private void observeDevice(Device device) {
+        subscriptions.put(device.getId(), controlService.subscribeToDevice(device,
+                new DeviceControlService.Callback<Device>() {
+            @Override public void onSuccess(Device saved) { replaceDevice(saved); }
+            @Override public void onError(Exception error) { /* The last state remains visible. */ }
+            @Override public void onStateSaveError(Device confirmed, Exception error) {
+                replaceDevice(confirmed);
+                showError(error);
+            }
+        }));
+    }
+
+    private void clearSubscriptions() {
+        for (ControllerGateway.Subscription subscription : subscriptions.values()) subscription.cancel();
+        subscriptions.clear();
+    }
+
+    private void replaceDevice(Device updated) {
+        if (!started) return;
+        for (int index = 0; index < devices.size(); index++) {
+            if (devices.get(index).getId() == updated.getId()) {
+                devices.set(index, updated);
+                refreshScreen();
+                return;
+            }
+        }
+    }
+
+    private void showError(Exception error) {
+        if (started) Toast.makeText(this, error.getMessage() == null ? "Ошибка" : error.getMessage(),
+                Toast.LENGTH_LONG).show();
     }
 
     private void setupRoomList()
@@ -166,9 +241,29 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onClick(View view)
             {
-                showComingSoon();
+                if (Build.VERSION.SDK_INT >= 37 && checkSelfPermission("android.permission.ACCESS_LOCAL_NETWORK")
+                        != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{"android.permission.ACCESS_LOCAL_NETWORK"}, 3101);
+                } else {
+                    showAddDeviceDialog();
+                }
             }
         });
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                                      int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != 3101) return;
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            showAddDeviceDialog();
+        } else {
+            Toast.makeText(this, R.string.esp_network_permission, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showAddDeviceDialog() {
+        AddEspDeviceDialog.show(this, rooms, selectedRoomId, controlService, this::loadData);
     }
 
     // Дата и приветствие считаются по текущему времени телефона.
@@ -268,9 +363,8 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    // ВРЕМЕННО: DeviceControlService ещё не готов, поэтому команды не отправляются
-    // и диалог честно сообщает об этом. Когда сервис появится, здесь передаём ему запрос
-    // и возвращаем null, если запрос принят.
+    // Текущая прошивка принимает только TCP-команду чтения 0x01.
+    // Кнопки управления покажут ограничение до появления обработчиков на ESP.
     private void showLightControlDialog(LightDevice device)
     {
         LightControlDialog dialog = new LightControlDialog(this, device,
@@ -345,7 +439,6 @@ public class MainActivity extends AppCompatActivity
         popupMenu.show();
     }
 
-    // ВРЕМЕННО: имя меняется только в памяти. Позже вызывать HomeRepository.renameDevice.
     private void showRenameDeviceDialog(final Device device)
     {
         NameInputDialog.show(this, R.string.haven_rename_device_title, R.string.haven_device_name_hint,
@@ -356,21 +449,22 @@ public class MainActivity extends AppCompatActivity
                     {
                         try
                         {
-                            // Проверку имени выполняет модель.
-                            device.setName(name);
+                            if (name.trim().isEmpty()) return getString(R.string.esp_need_name);
+                            repository.renameDevice(device.getId(), name, new RepositoryCallback<Device>() {
+                                @Override public void onSuccess(Device saved) { loadData(); }
+                                @Override public void onError(Exception error) { showError(error); }
+                            });
                         }
                         catch (IllegalArgumentException exception)
                         {
                             return getErrorText(exception);
                         }
 
-                        refreshScreen();
                         return null;
                     }
                 });
     }
 
-    // ВРЕМЕННО: устройство удаляется только из списка в памяти. Позже вызывать HomeRepository.removeDevice.
     private void showDeleteDeviceDialog(final Device device)
     {
         String message = getString(R.string.haven_delete_device_message, device.getName());
@@ -384,8 +478,10 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onClick(DialogInterface dialog, int which)
             {
-                devices.remove(device);
-                refreshScreen();
+                repository.deleteDevice(device.getId(), new RepositoryCallback<Boolean>() {
+                    @Override public void onSuccess(Boolean result) { loadData(); }
+                    @Override public void onError(Exception error) { showError(error); }
+                });
             }
         });
         builder.show();
@@ -423,7 +519,6 @@ public class MainActivity extends AppCompatActivity
         popupMenu.show();
     }
 
-    // ВРЕМЕННО: комната добавляется только в памяти. Позже вызывать HomeRepository.
     private void showAddRoomDialog()
     {
         NameInputDialog.show(this, R.string.haven_add_room_title, R.string.haven_room_name_hint,
@@ -432,22 +527,22 @@ public class MainActivity extends AppCompatActivity
                     @Override
                     public String onNameEntered(String name)
                     {
-                        int newId = createNextRoomId();
-
                         try
                         {
-                            // Проверку названия выполняет модель Room.
-                            Room newRoom = new Room(newId, name);
-                            rooms.add(newRoom);
+                            if (name.trim().isEmpty()) return getString(R.string.haven_error_name_invalid);
+                            repository.addRoom(name, new RepositoryCallback<Room>() {
+                                @Override public void onSuccess(Room saved) {
+                                    loadData();
+                                    recyclerRooms.smoothScrollToPosition(rooms.size());
+                                }
+                                @Override public void onError(Exception error) { showError(error); }
+                            });
                         }
                         catch (IllegalArgumentException exception)
                         {
                             return getErrorText(exception);
                         }
 
-                        refreshScreen();
-                        // Новый чип стоит сразу после последней комнаты: показываем его.
-                        recyclerRooms.smoothScrollToPosition(rooms.size());
                         return null;
                     }
                 });
@@ -463,14 +558,17 @@ public class MainActivity extends AppCompatActivity
                     {
                         try
                         {
-                            room.setName(name);
+                            if (name.trim().isEmpty()) return getString(R.string.haven_error_name_invalid);
+                            repository.renameRoom(room.getId(), name, new RepositoryCallback<Room>() {
+                                @Override public void onSuccess(Room saved) { loadData(); }
+                                @Override public void onError(Exception error) { showError(error); }
+                            });
                         }
                         catch (IllegalArgumentException exception)
                         {
                             return getErrorText(exception);
                         }
 
-                        refreshScreen();
                         return null;
                     }
                 });
@@ -505,40 +603,15 @@ public class MainActivity extends AppCompatActivity
         builder.show();
     }
 
-    // ВРЕМЕННО: позже вызывать HomeRepository.removeRoomWithDevices(roomId).
     private void removeRoomWithDevices(Room room)
     {
-        List<Device> devicesToKeep = new ArrayList<Device>();
-        for (Device device : devices)
-        {
-            if (device.getRoomId() != room.getId())
-            {
-                devicesToKeep.add(device);
+        repository.deleteRoom(room.getId(), new RepositoryCallback<Boolean>() {
+            @Override public void onSuccess(Boolean result) {
+                if (selectedRoomId == room.getId()) selectedRoomId = RoomAdapter.ALL_DEVICES_ID;
+                loadData();
             }
-        }
-        devices = devicesToKeep;
-        rooms.remove(room);
-
-        // Если удалили выбранную комнату, возвращаемся к «Все устройства».
-        if (selectedRoomId == room.getId())
-        {
-            selectedRoomId = RoomAdapter.ALL_DEVICES_ID;
-        }
-        refreshScreen();
-    }
-
-    // ВРЕМЕННО: уникальный id выдаёт HomeRepository. Пока берём максимальный + 1.
-    private int createNextRoomId()
-    {
-        int maxId = 0;
-        for (Room room : rooms)
-        {
-            if (room.getId() > maxId)
-            {
-                maxId = room.getId();
-            }
-        }
-        return maxId + 1;
+            @Override public void onError(Exception error) { showError(error); }
+        });
     }
 
     private String getErrorText(IllegalArgumentException exception)
@@ -551,8 +624,4 @@ public class MainActivity extends AppCompatActivity
         return message;
     }
 
-    private void showComingSoon()
-    {
-        Toast.makeText(this, R.string.haven_coming_soon, Toast.LENGTH_SHORT).show();
-    }
 }

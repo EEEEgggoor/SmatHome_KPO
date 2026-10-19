@@ -645,6 +645,26 @@ public class DeviceControlServiceTest
     }
 
     @Test
+    public void connection_waterLevelOnly_preservesMissingMeasurements() throws Exception
+    {
+        final ConnectionProbe result = new ConnectionProbe();
+        startConnection(result);
+        main(new Runnable()
+        {
+            @Override public void run()
+            {
+                gateway.connectionCallback.onWaterConnected(gateway.connectionRequestId,
+                        "water-new", 63, null, null, null, null);
+            }
+        });
+        WaterDevice saved = (WaterDevice) result.success();
+        assertEquals(Integer.valueOf(63), saved.getWaterLevel());
+        assertNull(saved.getTemperature());
+        assertNull(saved.getLevelStatus());
+        assertNull(saved.getLastUpdate());
+    }
+
+    @Test
     public void connection_missingRoom_doesNotContactGateway() throws Exception
     {
         final ConnectionProbe result = new ConnectionProbe();
@@ -671,7 +691,7 @@ public class DeviceControlServiceTest
             public void run()
             {
                 gateway.connectionCallback.onWaterConnected(gateway.connectionRequestId,
-                        "water-new", 50, null, null, null, false);
+                        "water-new", 50, null, "LOW", null, false);
             }
         });
         assertTrue(result.failure() instanceof IllegalArgumentException);

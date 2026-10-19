@@ -36,6 +36,16 @@ public class WaterDevice extends Device
     public void setValveOpen(boolean valveOpen){
         this.valveOpen = valveOpen;
     }
+    /** The current ESP firmware reports only a water level, without a measurement time. */
+    public void updateLevelOnly(int level) {
+        if (level < 0 || level > 100) {
+            throw new IllegalArgumentException("Уровень воды должен быть от 0 до 100.");
+        }
+        waterLevel = level;
+        temperature = null;
+        levelStatus = null;
+        lastUpdate = null;
+    }
     public void updateReading(int waterLevel, double temperature, String levelStatus, long lastUpdate) {
         if (waterLevel < 0 || waterLevel > 100) {
             throw new IllegalArgumentException("Уровень воды должен быть от 0 до 100.");
