@@ -1,12 +1,18 @@
-#include "mDns.h"
+#include "SH_mDns.h"
+#include <stdbool.h>
 
 void start_mdns_service(void)
 {
+    static bool service_started = false;
+    if (service_started)
+    {
+        return;
+    }
     //Инициализация mDNS
     esp_err_t err = mdns_init();
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Ошибка инициализации mDNS: %s", esp_err_to_name(err));
+        ESP_LOGE("mDNS", "Ошибка инициализации mDNS: %s", esp_err_to_name(err));
         return;
     }
 
@@ -24,5 +30,6 @@ void start_mdns_service(void)
         {"board", "esp32s2_mini"},
         {"path", "/index.html"}};
     ESP_ERROR_CHECK(mdns_service_txt_set("_http", "_tcp", serviceTxtData, 2));
+    service_started = true;
 
 }

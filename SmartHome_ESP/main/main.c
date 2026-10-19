@@ -14,6 +14,12 @@
 #include "esp_check.h"
 #include "usb_line_parser.h"
 #include "_WiFi.h"
+#include "storage.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+
+#include "lwip/sockets.h"
+#include "lwip/inet.h"
 
 #define WIFI_SSID_BUFFER_SIZE 33
 #define WIFI_PASS_BUFFER_SIZE 64
@@ -21,6 +27,8 @@
 static const char *TAG = "MAIN";
 static char wifi_ssid[WIFI_SSID_BUFFER_SIZE] = {0};
 static char wifi_pass[WIFI_PASS_BUFFER_SIZE] = {0};
+
+static Device s_device = {0};
 
 static esp_err_t init_nvs(void)
 {
@@ -149,30 +157,6 @@ static esp_err_t usb_read_two_lines(char *first, size_t first_size, char *second
 void app_main(void)
 {
 
-    ESP_LOGI(TAG, "Initializing NVS");
-
-    esp_err_t nvs_result = init_nvs();
-
-    if (nvs_result == ESP_OK)
-    {
-        ESP_LOGI(TAG, "Using saved WiFi credentials");
-    }
-    else if (nvs_result == ESP_ERR_NVS_NOT_FOUND)
-    {
-        ESP_LOGW(TAG, "WiFi credentials not found in NVS");
-
-        ESP_ERROR_CHECK(
-            usb_read_two_lines(
-                wifi_ssid,
-                sizeof(wifi_ssid),
-                wifi_pass,
-                sizeof(wifi_pass)));
-    }
-    else
-    {
-        ESP_ERROR_CHECK(nvs_result);
-    }
-
     ESP_LOGI(TAG, "Initializing TinyUSB");
 
     const tinyusb_config_t usb_config = {0};
@@ -194,36 +178,96 @@ void app_main(void)
 
     ESP_LOGI(TAG, "USB CDC initialized");
 
-    ESP_LOGI(TAG, "Waiting for SSID and password via USB");
+    ESP_LOGI(TAG, "Initializing NVS");
 
-    ESP_LOGI(TAG, "Wi-Fi credentials received");
+    esp_err_t nvs_result = init_nvs();
 
-    ESP_LOGI(TAG, "Connecting to Wi-Fi");
+    if (nvs_result == ESP_OK)
+    {
+        ESP_LOGI(TAG, "Using saved WiFi credentials");
+    }
+    else if (nvs_result == ESP_ERR_NVS_NOT_FOUND)
+    {
+        ESP_LOGW(TAG, "Credentials not found");
+        ESP_LOGI(TAG, "Waiting for USB credentials");
+
+        esp_err_t usb_result;
+        do
+        {
+            usb_result = usb_read_two_lines(
+                wifi_ssid, sizeof(wifi_ssid),
+                wifi_pass, sizeof(wifi_pass));
+            if (usb_result != ESP_OK)
+                ESP_LOGW(TAG, "Invalid USB credentials: %s",
+                         esp_err_to_name(usb_result));
+        } while (usb_result != ESP_OK);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "NVS error: %s", esp_err_to_name(nvs_result));
+        return;
+    }
+
+    esp_err_t dev_result = stor_load(&s_device);
+
+    if (dev_result == ESP_OK)
+    {
+        ESP_LOGI(TAG, "Device loaded successfully");
+
+        ESP_LOGI(TAG, "Device name: %s", s_device.name);
+
+        ESP_LOGI(TAG, "Controller ID: %s",
+                 s_device.controller_id);
+    }
+    else if (dev_result == ESP_ERR_NVS_NOT_FOUND ||
+             dev_result == ESP_ERR_INVALID_RESPONSE ||
+             dev_result == ESP_ERR_INVALID_SIZE)
+    {
+        ESP_LOGW(TAG, "Device record missing or invalid, creating default");
+
+        ESP_LOGI(TAG, "Default Device saved");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Failed to load Device: %s",
+                 esp_err_to_name(dev_result));
+        return;
+    }
+    ESP_LOGI(TAG, "Connecting to WiFi");
 
     esp_err_t wifi_result = wifi_init(
         wifi_ssid,
         wifi_pass);
-    if (wifi_result == ESP_OK)
+
+    while (wifi_result != ESP_OK)
+    {
+        ESP_LOGW(TAG, "WiFi failed: %s; waiting for new USB credentials",
+                 esp_err_to_name(wifi_result));
+        if (tud_cdc_connected())
+        {
+            tud_cdc_write_str("WIFI_FAILED\n");
+            tud_cdc_write_flush();
+        }
+
+        esp_err_t usb_result = usb_read_two_lines(
+            wifi_ssid, sizeof(wifi_ssid),
+            wifi_pass, sizeof(wifi_pass));
+        if (usb_result != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Invalid USB credentials: %s",
+                     esp_err_to_name(usb_result));
+            continue;
+        }
+
+        wifi_result = wifi_init(wifi_ssid, wifi_pass);
+    }
+
+    if (tud_cdc_connected())
     {
         tud_cdc_write_str("WIFI_CONNECTED\n");
-    }
-    else
-    {
-        tud_cdc_write_str("WIFI_FAILED\n");
+        tud_cdc_write_flush();
     }
 
-    tud_cdc_write_flush();
+    ESP_LOGI(TAG, "WiFi result: %s", esp_err_to_name(wifi_result));
 
-    if (wifi_result == ESP_OK)
-    {
-        ESP_LOGI(TAG, "Wi-Fi connection successful");
-    }
-    else if (wifi_result == ESP_ERR_TIMEOUT)
-    {
-        ESP_LOGW(TAG, "Wi-Fi connection timed out");
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Wi-Fi connection error: %s", esp_err_to_name(wifi_result));
-    }
 }

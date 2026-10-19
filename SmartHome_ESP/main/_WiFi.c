@@ -3,6 +3,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -17,18 +18,20 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#include "mDns.h"
+#include "SH_mDns.h"
 
 #define MAX_RETRY 10
 #define WIFI_CONNBIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
-#define WIFI_TIMEOUT_MS 10000
+#define WIFI_TIMEOUT_MS 60000
 
 static const char *TAG_WIFI = "WIFI";
 
 static int s_retry_num = 0;
 static EventGroupHandle_t s_wifi_event_group = NULL;
+static bool s_wifi_ready = false;
+static bool s_should_connect = false;
 
 static void event_handler(
     void *arg,
@@ -41,6 +44,8 @@ static void event_handler(
     if (event_base == WIFI_EVENT &&
         event_id == WIFI_EVENT_STA_START)
     {
+        if (!s_should_connect)
+            return;
         ESP_LOGI(TAG_WIFI, "Wi-Fi started");
 
         esp_err_t err = esp_wifi_connect();
@@ -60,6 +65,9 @@ static void event_handler(
         xEventGroupClearBits(
             s_wifi_event_group,
             WIFI_CONNBIT);
+
+        if (!s_should_connect)
+            return;
 
         if (s_retry_num < MAX_RETRY)
         {
@@ -87,17 +95,21 @@ static void event_handler(
                 WIFI_FAIL_BIT);
         }
 
-        start_mdns_service();
     }
 
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
+        if (!s_should_connect)
+            return;
         ip_event_got_ip_t *event =
             (ip_event_got_ip_t *)event_data;
 
         ESP_LOGI(TAG_WIFI, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
 
         s_retry_num = 0;
+
+        start_mdns_service();
+
 
         xEventGroupClearBits(
             s_wifi_event_group,
@@ -107,6 +119,23 @@ static void event_handler(
             s_wifi_event_group,
             WIFI_CONNBIT);
     }
+}
+
+static esp_err_t save_credentials(const char *ssid, const char *password)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("wifi_cfg", NVS_READWRITE, &handle);
+    if (err != ESP_OK)
+        return err;
+
+    err = nvs_set_str(handle, "ssid", ssid);
+    if (err == ESP_OK)
+        err = nvs_set_str(handle, "password", password);
+    if (err == ESP_OK)
+        err = nvs_commit(handle);
+
+    nvs_close(handle);
+    return err;
 }
 
 esp_err_t wifi_init(
@@ -131,55 +160,33 @@ esp_err_t wifi_init(
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (s_wifi_event_group != NULL)
+    if (!s_wifi_ready)
     {
-        ESP_LOGE(TAG_WIFI, "Wi-Fi already initialized");
+        s_wifi_event_group = xEventGroupCreate();
+        if (s_wifi_event_group == NULL)
+            return ESP_ERR_NO_MEM;
 
-        return ESP_ERR_INVALID_STATE;
+        ESP_ERROR_CHECK(esp_netif_init());
+        ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+        esp_netif_t *netif = esp_netif_create_default_wifi_sta();
+        if (netif == NULL)
+        {
+            ESP_LOGE(TAG_WIFI, "Failed to create network interface");
+            return ESP_FAIL;
+        }
+
+        wifi_init_config_t wifi_conf = WIFI_INIT_CONFIG_DEFAULT();
+        ESP_ERROR_CHECK(esp_wifi_init(&wifi_conf));
+
+        esp_event_handler_instance_t inst_any_id;
+        esp_event_handler_instance_t inst_got_ip;
+        ESP_ERROR_CHECK(esp_event_handler_instance_register(
+            WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &inst_any_id));
+        ESP_ERROR_CHECK(esp_event_handler_instance_register(
+            IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, &inst_got_ip));
+        s_wifi_ready = true;
     }
-
-    s_wifi_event_group = xEventGroupCreate();
-
-    if (s_wifi_event_group == NULL)
-    {
-        return ESP_ERR_NO_MEM;
-    }
-
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    esp_netif_t *netif =
-        esp_netif_create_default_wifi_sta();
-
-    if (netif == NULL)
-    {
-        ESP_LOGE(TAG_WIFI, "Failed to create network interface");
-        return ESP_FAIL;
-    }
-
-    wifi_init_config_t wifi_conf =
-        WIFI_INIT_CONFIG_DEFAULT();
-
-    ESP_ERROR_CHECK(esp_wifi_init(&wifi_conf));
-
-    esp_event_handler_instance_t inst_any_id;
-    esp_event_handler_instance_t inst_got_ip;
-
-    ESP_ERROR_CHECK(
-        esp_event_handler_instance_register(
-            WIFI_EVENT,
-            ESP_EVENT_ANY_ID,
-            &event_handler,
-            NULL,
-            &inst_any_id));
-
-    ESP_ERROR_CHECK(
-        esp_event_handler_instance_register(
-            IP_EVENT,
-            IP_EVENT_STA_GOT_IP,
-            &event_handler,
-            NULL,
-            &inst_got_ip));
 
     wifi_config_t wifi_config = {0};
 
@@ -199,26 +206,6 @@ esp_err_t wifi_init(
     wifi_config.sta.pmf_cfg.capable = true;
     wifi_config.sta.pmf_cfg.required = false;
 
-    nvs_handle_t handle;
-
-    esp_err_t err = nvs_open("wifi_cfg",
-                            NVS_READWRITE,
-                            &handle);
-
-    err = nvs_set_str(handle, "ssid", wifi_ssid);
-
-    if (err == ESP_OK)
-    {
-        err = nvs_set_str(handle, "pass", wifi_pass);
-    }
-
-    if (err == ESP_OK)
-    {
-        nvs_commit(&handle);
-    }
-
-    nvs_close(&handle);
-
     ESP_ERROR_CHECK(
         esp_wifi_set_mode(WIFI_MODE_STA));
 
@@ -228,6 +215,8 @@ esp_err_t wifi_init(
             &wifi_config));
 
     s_retry_num = 0;
+    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNBIT | WIFI_FAIL_BIT);
+    s_should_connect = true;
 
     ESP_LOGI(TAG_WIFI, "Starting Wi-Fi...");
 
@@ -243,8 +232,22 @@ esp_err_t wifi_init(
     if (bits & WIFI_CONNBIT)
     {
         ESP_LOGI(TAG_WIFI, "Connected successfully");
-
+        esp_err_t save_err = save_credentials(wifi_ssid, wifi_pass);
+        if (save_err != ESP_OK)
+        {
+            ESP_LOGE(TAG_WIFI, "Failed to save Wi-Fi credentials: %s",
+                     esp_err_to_name(save_err));
+        }
         return ESP_OK;
+    }
+
+    s_should_connect = false;
+    esp_err_t stop_err = esp_wifi_stop();
+    if (stop_err != ESP_OK)
+    {
+        ESP_LOGE(TAG_WIFI, "Failed to stop Wi-Fi: %s",
+                 esp_err_to_name(stop_err));
+        return stop_err;
     }
 
     if (bits & WIFI_FAIL_BIT)

@@ -1,3 +1,6 @@
+#ifndef SH_MDNS_H
+#define SH_MDNS_H
+
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -10,3 +13,5 @@
 #include "mdns.h"
 
 void start_mdns_service(void);
+
+#endif

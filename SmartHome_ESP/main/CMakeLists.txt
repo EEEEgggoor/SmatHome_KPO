@@ -4,6 +4,8 @@ idf_component_register(
         "main.c"
         "_WiFi.c"
         "usb_line_parser.c"
+        "storage.c"
+        "SH_mDns.c"
 
     INCLUDE_DIRS
         "."
