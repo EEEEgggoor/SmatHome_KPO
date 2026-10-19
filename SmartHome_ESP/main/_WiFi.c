@@ -17,6 +17,8 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "mDns.h"
+
 #define MAX_RETRY 10
 #define WIFI_CONNBIT BIT0
 #define WIFI_FAIL_BIT BIT1
@@ -84,6 +86,8 @@ static void event_handler(
                 s_wifi_event_group,
                 WIFI_FAIL_BIT);
         }
+
+        start_mdns_service();
     }
 
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
