@@ -40,6 +40,63 @@ public class Esp32WireTest {
         Esp32Wire.parseSnapshot(new byte[79]);
     }
 
+    @Test
+    public void request_percentagesIncludeBothBoundaries()
+    {
+        byte[] minimum = Esp32Wire.setLightStateRequest("esp", false, 0);
+        byte[] maximum = Esp32Wire.setLightStateRequest("esp", true, 100);
+        assertEquals(35, maximum.length);
+        assertEquals(0, minimum[33]);
+        assertEquals(0, minimum[34]);
+        assertEquals(1, maximum[33]);
+        assertEquals(100, maximum[34]);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void request_rejectsBrightnessAbove100()
+    {
+        Esp32Wire.setLightStateRequest("esp", true, 101);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void request_rejectsNullControllerId()
+    {
+        Esp32Wire.readWaterLevelRequest(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void request_rejectsBlankControllerId()
+    {
+        Esp32Wire.readWaterLevelRequest("   ");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void request_rejectsEmbeddedZeroInControllerId()
+    {
+        Esp32Wire.setRelayStateRequest("esp\0another", true);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void request_reservesTerminatorIn32ByteId()
+    {
+        Esp32Wire.readWaterLevelRequest("12345678901234567890123456789012");
+    }
+
+    @Test
+    public void request_accepts31ByteIdAndZeroTerminatesIt()
+    {
+        byte[] request = Esp32Wire.readWaterLevelRequest("1234567890123456789012345678901");
+        assertEquals(33, request.length);
+        assertEquals(2, request[0]);
+        assertEquals(0, request[32]);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void request_measuresIdInUtf8Bytes()
+    {
+        Esp32Wire.readWaterLevelRequest("абвгабвгабвгабвг");
+    }
+
     private static byte[] snapshot(int type, String id, boolean online, int value) {
         byte[] raw = new byte[80];
         raw[0] = (byte) type;

@@ -748,7 +748,7 @@ public class DeviceControlServiceTest
     }
 
     @Test
-    public void connection_cancelDuringSave_suppressesResultWithoutUndoingInsert() throws Exception
+    public void connection_cancelDuringDuplicateCheck_doesNotInsert() throws Exception
     {
         final ConnectionProbe result = new ConnectionProbe();
         final ControllerGateway.ConnectionAttempt[] handle = new ControllerGateway.ConnectionAttempt[1];
@@ -770,6 +770,51 @@ public class DeviceControlServiceTest
                 handle[0].cancel();
             }
         });
+        awaitRepository();
+        assertEquals(0, result.calls.get());
+        assertEquals(0, database.deviceDao().getAll().size());
+    }
+
+    @Test
+    public void connection_cancelDuringSave_suppressesResultWithoutUndoingInsert() throws Exception
+    {
+        final ConnectionProbe result = new ConnectionProbe();
+        final ControllerGateway.ConnectionAttempt[] handle = new ControllerGateway.ConnectionAttempt[1];
+        final CountDownLatch saveStarted = new CountDownLatch(1);
+        repository = new HomeRepository(database)
+        {
+            @Override
+            public void addRelayDevice(@NonNull String name, int roomId,
+                                       @NonNull String controllerId, boolean online,
+                                       boolean poweredOn,
+                                       @NonNull RepositoryCallback<RelayDevice> callback)
+            {
+                // Отмена именно после постановки записи в очередь БД, а не во время
+                // добавленной проверки дубликатов. Callback ещё не успел прийти на main.
+                super.addRelayDevice(name, roomId, controllerId, online, poweredOn, callback);
+                handle[0].cancel();
+                saveStarted.countDown();
+            }
+        };
+        service = new DeviceControlService(repository, gateway, 2000L, 5000L);
+        main(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                handle[0] = service.connectDevice("Реле", roomId, "wifi", "", result);
+            }
+        });
+        gateway.awaitConnection();
+        main(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                gateway.connectionCallback.onRelayConnected(gateway.connectionRequestId, "new", true);
+            }
+        });
+        assertTrue(saveStarted.await(5, TimeUnit.SECONDS));
         awaitRepository();
         assertEquals(0, result.calls.get());
         assertEquals(1, database.deviceDao().getAll().size());

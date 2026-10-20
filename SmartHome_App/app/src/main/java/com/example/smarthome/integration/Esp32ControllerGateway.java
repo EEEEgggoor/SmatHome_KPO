@@ -28,7 +28,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Integration with the commands actually present in the SmartHome_ESP branch. */
+/** Связь с ESP32. Команды 0x02–0x04 требуют соответствующих обработчиков в прошивке. */
 public final class Esp32ControllerGateway implements ControllerGateway {
     private static final String USB_PERMISSION = "com.example.smarthome.USB_PERMISSION";
     private static volatile Attempt pendingUsbPermission;
@@ -40,6 +40,8 @@ public final class Esp32ControllerGateway implements ControllerGateway {
     private final ExecutorService io = Executors.newCachedThreadPool();
     private final ScheduledExecutorService polling = Executors.newScheduledThreadPool(1);
     private final ConcurrentHashMap<String, InetSocketAddress> knownAddresses = new ConcurrentHashMap<>();
+    // Чтение и команда одной платы публикуются в том же порядке, что выполняются.
+    private final ConcurrentHashMap<String, Object> deviceLocks = new ConcurrentHashMap<>();
     private Attempt activeAttempt;
 
     public Esp32ControllerGateway(Context context) {
@@ -169,15 +171,15 @@ public final class Esp32ControllerGateway implements ControllerGateway {
                             fail(new IOException("ESP32-S2 сообщил, что он не в сети."));
                             return;
                         }
-                        // The C LightData has no light temperature, and WaterData has no
-                        // timestamp/temperature/valve. Never invent missing measurements.
-                        if (state.type == 0) {
-                            fail(new IOException("Прошивка не передаёт температуру света."));
-                            return;
-                        }
                         finished = true;
                         activeAttempt = null;
-                        if (state.type == 1) {
+                        if (state.type == 0)
+                        {
+                            // Температуры света в оборудовании нет. Ноль нужен старой модели.
+                            callback.onLightConnected(requestId, state.controllerId,
+                                    state.poweredOn, state.value, 0);
+                        }
+                        else if (state.type == 1) {
                             callback.onRelayConnected(requestId, state.controllerId, state.poweredOn);
                         } else {
                             if (state.value > 100) {
@@ -225,32 +227,86 @@ public final class Esp32ControllerGateway implements ControllerGateway {
         return network.findAndRead(controllerId);
     }
 
-    @Override public void readDeviceState(long requestId, @NonNull Device device,
-            @NonNull Callback<Device> callback) {
-        io.execute(() -> {
-            try {
-                Esp32Wire.Snapshot state = readSnapshot(device.getControllerId());
-                Device result = makeState(device, state);
-                main.post(() -> callback.onSuccess(requestId, result));
-            } catch (Exception error) {
-                main.post(() -> callback.onError(requestId, device.getId(), error));
+    private Object deviceLock(String controllerId)
+    {
+        Object newLock = new Object();
+        Object existingLock = deviceLocks.putIfAbsent(controllerId, newLock);
+        if (existingLock != null)
+        {
+            return existingLock;
+        }
+        return newLock;
+    }
+
+    private InetSocketAddress addressFor(String controllerId) throws IOException
+    {
+        InetSocketAddress address = knownAddresses.get(controllerId);
+        if (address == null)
+        {
+            Esp32NetworkClient.Result found = network.findAndRead(controllerId);
+            address = found.address;
+            knownAddresses.put(controllerId, address);
+        }
+        return address;
+    }
+
+    @Override
+    public void readDeviceState(final long requestId, @NonNull final Device device,
+                                @NonNull final Callback<Device> callback)
+    {
+        io.execute(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                synchronized (deviceLock(device.getControllerId()))
+                {
+                    try
+                    {
+                        Esp32Wire.Snapshot state = readSnapshot(device);
+                        final Device result = makeState(device, state);
+                        main.post(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                callback.onSuccess(requestId, result);
+                            }
+                        });
+                    }
+                    catch (final Exception error)
+                    {
+                        postError(requestId, device, callback, error);
+                    }
+                }
             }
         });
     }
 
-    private Esp32Wire.Snapshot readSnapshot(String controllerId) throws IOException {
-        InetSocketAddress address = knownAddresses.get(controllerId);
-        if (address != null) {
-            try {
-                Esp32Wire.Snapshot result = network.read(address);
-                if (controllerId.equals(result.controllerId)) return result;
-            } catch (IOException | IllegalArgumentException ignored) {
-                knownAddresses.remove(controllerId);
+    private Esp32Wire.Snapshot readSnapshot(Device device) throws IOException
+    {
+        String controllerId = device.getControllerId();
+        try
+        {
+            InetSocketAddress address = addressFor(controllerId);
+            if (device instanceof WaterDevice)
+            {
+                // Отдельная команда обновляет показания воды, а не настройки устройства.
+                return network.readWaterLevel(address, controllerId);
             }
+            Esp32Wire.Snapshot state = network.read(address);
+            if (!controllerId.equals(state.controllerId))
+            {
+                throw new IOException("Ответ получен от другого контроллера.");
+            }
+            return state;
         }
-        Esp32NetworkClient.Result found = network.findAndRead(controllerId);
-        knownAddresses.put(controllerId, found.address);
-        return found.snapshot;
+        catch (IOException error)
+        {
+            // Следующий запрос заново найдёт адрес. Текущую команду не повторяем.
+            knownAddresses.remove(controllerId);
+            throw error;
+        }
     }
 
     private Device makeState(Device device, Esp32Wire.Snapshot state) throws IOException {
@@ -292,77 +348,197 @@ public final class Esp32ControllerGateway implements ControllerGateway {
         throw new IOException("Тип устройства не совпадает с ответом ESP32-S2.");
     }
 
-    @Override public void setRelayState(long requestId, @NonNull RelayDevice device,
-            boolean poweredOn, @NonNull Callback<RelayDevice> callback) {
-        unsupported(requestId, device, callback);
-    }
-
-    @Override public void setLightState(long requestId, @NonNull LightDevice device,
-            boolean poweredOn, int brightness, int lightTemperature,
-            @NonNull Callback<LightDevice> callback) {
-        unsupported(requestId, device, callback);
-    }
-
-    @Override public void setValveOpen(long requestId, @NonNull WaterDevice device,
-            boolean valveOpen, @NonNull Callback<WaterDevice> callback) {
-        unsupported(requestId, device, callback);
-    }
-
-    private <T extends Device> void unsupported(long requestId, T device, Callback<T> callback) {
-        main.post(() -> callback.onError(requestId, device.getId(),
-                new UnsupportedOperationException("Прошивка ESP32-S2 пока не принимает команды управления.")));
-    }
-
-    @Override public Subscription subscribeToDevice(@NonNull Device device,
-            @NonNull DeviceListener listener) {
-        AtomicBoolean cancelled = new AtomicBoolean();
-        final boolean[] lastOnline = {device.isOnline()};
-        final Device[] lastState = {device};
-        ScheduledFuture<?> task = polling.scheduleWithFixedDelay(() -> {
-            if (cancelled.get()) return;
-            try {
-                Device state = makeState(device, readSnapshot(device.getControllerId()));
-                main.post(() -> {
-                    if (cancelled.get()) return;
-                    if (lastOnline[0] != state.isOnline()) {
-                        lastOnline[0] = state.isOnline();
-                        listener.onAvailabilityChanged(device.getId(), state.isOnline());
+    @Override
+    public void setRelayState(final long requestId, @NonNull final RelayDevice device,
+                              final boolean poweredOn, @NonNull final Callback<RelayDevice> callback)
+    {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(9);
+        io.execute(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                synchronized (deviceLock(device.getControllerId()))
+                {
+                    try
+                    {
+                        InetSocketAddress address = addressFor(device.getControllerId());
+                        Esp32Wire.Snapshot state = network.setRelayState(address,
+                                device.getControllerId(), poweredOn, deadline);
+                        final RelayDevice result = new RelayDevice(device.getId(), device.getName(),
+                                device.getRoomId(), device.getControllerId(), state.online, state.poweredOn);
+                        main.post(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                callback.onSuccess(requestId, result);
+                            }
+                        });
                     }
-                    if (state.isOnline() && changed(lastState[0], state)) {
-                        lastState[0] = state;
-                        listener.onStateChanged(state);
+                    catch (final Exception error)
+                    {
+                        knownAddresses.remove(device.getControllerId());
+                        postError(requestId, device, callback, error);
                     }
-                });
-            } catch (Exception error) {
-                main.post(() -> {
-                    if (cancelled.get()) return;
-                    if (lastOnline[0] && (error instanceof IOException
-                            || error instanceof SecurityException)) {
-                        lastOnline[0] = false;
-                        listener.onAvailabilityChanged(device.getId(), false);
+                }
+            }
+        });
+    }
+
+    @Override
+    public void setLightState(final long requestId, @NonNull final LightDevice device,
+                              final boolean poweredOn, final int brightness, final int lightTemperature,
+                              @NonNull final Callback<LightDevice> callback)
+    {
+        if (lightTemperature < 0 || lightTemperature > 100)
+        {
+            postError(requestId, device, callback,
+                    new IllegalArgumentException("Температура света должна быть от 0 до 100."));
+            return;
+        }
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(9);
+        io.execute(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                synchronized (deviceLock(device.getControllerId()))
+                {
+                    try
+                    {
+                        // Проверяем яркость до поиска и отправки.
+                        Esp32Wire.setLightStateRequest(device.getControllerId(), poweredOn, brightness);
+                        InetSocketAddress address = addressFor(device.getControllerId());
+                        Esp32Wire.Snapshot state = network.setLightState(address,
+                                device.getControllerId(), poweredOn, brightness, deadline);
+                        // Температуру не отправляем: сохраняем параметр для совместимости сервиса.
+                        final LightDevice result = new LightDevice(device.getId(), device.getName(),
+                                device.getRoomId(), device.getControllerId(), state.online,
+                                state.poweredOn, state.value, lightTemperature);
+                        main.post(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                callback.onSuccess(requestId, result);
+                            }
+                        });
                     }
-                    listener.onError(device.getId(), error);
-                });
+                    catch (final Exception error)
+                    {
+                        knownAddresses.remove(device.getControllerId());
+                        postError(requestId, device, callback, error);
+                    }
+                }
+            }
+        });
+    }
+
+    @Override
+    public void setValveOpen(long requestId, @NonNull WaterDevice device,
+                             boolean valveOpen, @NonNull Callback<WaterDevice> callback)
+    {
+        // WaterData.power_on не описывает положение клапана. Не выдаём его за подтверждение.
+        postError(requestId, device, callback,
+                new UnsupportedOperationException("Протокол управления клапаном ещё не определён."));
+    }
+
+    private <T extends Device> void postError(final long requestId, final T device,
+                                              final Callback<T> callback, final Exception error)
+    {
+        main.post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                callback.onError(requestId, device.getId(), error);
+            }
+        });
+    }
+
+    @Override
+    public Subscription subscribeToDevice(@NonNull final Device device,
+                                           @NonNull final DeviceListener listener)
+    {
+        final AtomicBoolean cancelled = new AtomicBoolean();
+        final boolean[] lastOnline = new boolean[]{device.isOnline()};
+        final ScheduledFuture<?> task = polling.scheduleWithFixedDelay(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                if (cancelled.get())
+                {
+                    return;
+                }
+                synchronized (deviceLock(device.getControllerId()))
+                {
+                    if (cancelled.get())
+                    {
+                        return;
+                    }
+                    try
+                    {
+                        final Device state = makeState(device, readSnapshot(device));
+                        main.post(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                if (cancelled.get())
+                                {
+                                    return;
+                                }
+                                if (lastOnline[0] != state.isOnline())
+                                {
+                                    lastOnline[0] = state.isOnline();
+                                    listener.onAvailabilityChanged(device.getId(), state.isOnline());
+                                }
+                                // После команды состояние меняется и вне этой подписки.
+                                // Передаём каждый снимок, даже совпавший с прошлым опросом.
+                                if (state.isOnline() && !cancelled.get())
+                                {
+                                    listener.onStateChanged(state);
+                                }
+                            }
+                        });
+                    }
+                    catch (final Exception error)
+                    {
+                        main.post(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                if (cancelled.get())
+                                {
+                                    return;
+                                }
+                                if (lastOnline[0] && (error instanceof IOException
+                                        || error instanceof SecurityException))
+                                {
+                                    lastOnline[0] = false;
+                                    listener.onAvailabilityChanged(device.getId(), false);
+                                }
+                                if (!cancelled.get())
+                                {
+                                    listener.onError(device.getId(), error);
+                                }
+                            }
+                        });
+                    }
+                }
             }
         }, 0, 5, TimeUnit.SECONDS);
-        return () -> { cancelled.set(true); task.cancel(true); };
-    }
-
-    private static boolean changed(Device before, Device after) {
-        if (before.isOnline() != after.isOnline()) return true;
-        if (before instanceof RelayDevice && after instanceof RelayDevice) {
-            return ((RelayDevice) before).isPoweredOn() != ((RelayDevice) after).isPoweredOn();
-        }
-        if (before instanceof LightDevice && after instanceof LightDevice) {
-            LightDevice a = (LightDevice) before;
-            LightDevice b = (LightDevice) after;
-            return a.isPoweredOn() != b.isPoweredOn() || a.getBrightness() != b.getBrightness();
-        }
-        if (before instanceof WaterDevice && after instanceof WaterDevice) {
-            Integer a = ((WaterDevice) before).getWaterLevel();
-            Integer b = ((WaterDevice) after).getWaterLevel();
-            return a == null ? b != null : !a.equals(b);
-        }
-        return true;
+        return new Subscription()
+        {
+            @Override
+            public void cancel()
+            {
+                cancelled.set(true);
+                task.cancel(true);
+            }
+        };
     }
 }

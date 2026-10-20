@@ -100,7 +100,7 @@ public final class AddEspDeviceDialog {
                     if (dismissed[0]) return;
                     usbAdd.setEnabled(true);
                     ControllerGateway.DiscoveredDevice chosen = selectedDevice(discoveredGroup, found);
-                    wifiAdd.setEnabled(chosen != null && chosen.type != 0);
+                    wifiAdd.setEnabled(chosen != null);
                     status.setText(message(error));
                     attempt[0] = null;
                 }
@@ -110,7 +110,7 @@ public final class AddEspDeviceDialog {
                     if (dismissed[0]) return;
                     usbAdd.setEnabled(true);
                     ControllerGateway.DiscoveredDevice chosen = selectedDevice(discoveredGroup, found);
-                    wifiAdd.setEnabled(chosen != null && chosen.type != 0);
+                    wifiAdd.setEnabled(chosen != null);
                     status.setText(context.getString(R.string.esp_save_failed, message(error)));
                     attempt[0] = null;
                 }
@@ -118,10 +118,9 @@ public final class AddEspDeviceDialog {
 
             discoveredGroup.setOnCheckedChangeListener((group, checkedId) -> {
                 ControllerGateway.DiscoveredDevice chosen = selectedDevice(discoveredGroup, found);
-                wifiAdd.setEnabled(chosen != null && chosen.type != 0 && attempt[0] == null);
-                if (chosen != null && chosen.type == 0) {
-                    scanStatus.setText(R.string.esp_wifi_light_unavailable);
-                } else if (chosen != null) {
+                wifiAdd.setEnabled(chosen != null && attempt[0] == null);
+                if (chosen != null)
+                {
                     scanStatus.setText(R.string.esp_wifi_select);
                 }
             });
@@ -148,7 +147,10 @@ public final class AddEspDeviceDialog {
 
             wifiAdd.setOnClickListener(view -> {
                 ControllerGateway.DiscoveredDevice chosen = selectedDevice(discoveredGroup, found);
-                if (chosen == null || chosen.type == 0 || !validName(context, name, nameLayout)) return;
+                if (chosen == null || !validName(context, name, nameLayout))
+                {
+                    return;
+                }
                 usbAdd.setEnabled(false);
                 wifiAdd.setEnabled(false);
                 status.setVisibility(View.VISIBLE);

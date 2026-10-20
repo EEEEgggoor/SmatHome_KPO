@@ -5,21 +5,20 @@ import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-/** Discovery and the single TCP command currently implemented by tcp_service.c. */
+/** Поиск контроллеров и передача команд TCP. Формат описан в Esp32Wire. */
 final class Esp32NetworkClient {
     private static final String SERVICE_TYPE = "_smarthome._tcp.";
     private final NsdManager nsd;
     private final WifiManager wifi;
+    private final Esp32TcpClient tcp = new Esp32TcpClient();
 
     Esp32NetworkClient(Context context) {
         nsd = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
@@ -111,16 +110,29 @@ final class Esp32NetworkClient {
         }
     }
 
-    Esp32Wire.Snapshot read(InetSocketAddress address) throws IOException {
-        try (Socket socket = new Socket()) {
-            socket.connect(address, 4000);
-            socket.setSoTimeout(5000);
-            socket.getOutputStream().write(Esp32Wire.READ_DEVICE);
-            socket.getOutputStream().flush();
-            byte[] response = new byte[Esp32Wire.SNAPSHOT_SIZE];
-            new DataInputStream(socket.getInputStream()).readFully(response);
-            return Esp32Wire.parseSnapshot(response);
-        }
+    Esp32Wire.Snapshot read(InetSocketAddress address) throws IOException
+    {
+        return tcp.read(address);
+    }
+
+    Esp32Wire.Snapshot readWaterLevel(InetSocketAddress address, String controllerId)
+            throws IOException
+    {
+        return tcp.readWaterLevel(address, controllerId);
+    }
+
+    Esp32Wire.Snapshot setLightState(InetSocketAddress address, String controllerId,
+                                    boolean poweredOn, int brightness, long deadlineNanos) throws IOException
+    {
+        Esp32TcpClient commandClient = new Esp32TcpClient(4000, 5000, deadlineNanos);
+        return commandClient.setLightState(address, controllerId, poweredOn, brightness);
+    }
+
+    Esp32Wire.Snapshot setRelayState(InetSocketAddress address, String controllerId,
+                                    boolean poweredOn, long deadlineNanos) throws IOException
+    {
+        Esp32TcpClient commandClient = new Esp32TcpClient(4000, 5000, deadlineNanos);
+        return commandClient.setRelayState(address, controllerId, poweredOn);
     }
 
     static final class Result {
