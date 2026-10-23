@@ -363,17 +363,39 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    // Текущая прошивка принимает только TCP-команду чтения 0x01.
-    // Кнопки управления покажут ограничение до появления обработчиков на ESP.
+    // Свет управляется TCP-командой 0x03: ID, питание и яркость.
     private void showLightControlDialog(LightDevice device)
     {
         LightControlDialog dialog = new LightControlDialog(this, device,
                 new LightControlDialog.LightControlListener()
                 {
                     @Override
-                    public String onLightApplyRequested(boolean poweredOn, int brightness, int lightTemperature)
+                    public String onLightApplyRequested(boolean poweredOn, int brightness)
                     {
-                        return getString(R.string.haven_control_unavailable);
+                        controlService.setLightState(device, poweredOn, brightness,
+                                device.getLightTemperature(),
+                                new DeviceControlService.Callback<LightDevice>()
+                                {
+                                    @Override
+                                    public void onSuccess(LightDevice saved)
+                                    {
+                                        replaceDevice(saved);
+                                    }
+
+                                    @Override
+                                    public void onError(Exception error)
+                                    {
+                                        showError(error);
+                                    }
+
+                                    @Override
+                                    public void onStateSaveError(LightDevice confirmed, Exception error)
+                                    {
+                                        replaceDevice(confirmed);
+                                        showError(error);
+                                    }
+                                });
+                        return null;
                     }
                 });
         dialog.show();
