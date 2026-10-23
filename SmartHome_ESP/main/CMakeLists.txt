@@ -7,6 +7,7 @@ idf_component_register(
         "storage.c"
         "SH_mDns.c"
         "tcp_service.c"
+        "control_device.c"
 
     INCLUDE_DIRS
         "."
@@ -18,4 +19,6 @@ idf_component_register(
         nvs_flash
         esp_tinyusb
         lwip
+
+    PRIV_REQUIRES esp_driver_ledc esp_driver_gpio
 )

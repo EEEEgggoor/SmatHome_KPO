@@ -30,7 +30,7 @@ typedef struct {
     int32_t id;                 // Идентификатор устройства в БД
     int32_t room_id;            // ID комнаты, к которой привязано устройство
     char name[32];              // Название устройства (null-terminated строка)
-    char controller_id[32];     // Идентификатор контроллера (например, ESP32/MAC)
+    unsigned char controller_id[32];     // Идентификатор контроллера (например, ESP32/MAC)
     bool online;                // Статус подключения устройства к сети
 
     union {

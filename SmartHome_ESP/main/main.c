@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "esp_err.h"
 #include "esp_log.h"
@@ -19,7 +20,7 @@
 #include "SH_mDns.h"
 #include "nvs_flash.h"
 #include "nvs.h"
-
+#include "esp_random.h"
 
 #define WIFI_SSID_BUFFER_SIZE 33
 #define WIFI_PASS_BUFFER_SIZE 64
@@ -29,6 +30,38 @@ static char wifi_ssid[WIFI_SSID_BUFFER_SIZE] = {0};
 static char wifi_pass[WIFI_PASS_BUFFER_SIZE] = {0};
 
 static Device s_device = {0};
+
+static void generate_controller_id(unsigned char id[32])
+{
+    static const char hex[] = "0123456789abcdef";
+    uint8_t random_bytes[15];
+
+    esp_fill_random(random_bytes, sizeof(random_bytes));
+    memset(id, 0, 32);
+
+    for (size_t i = 0; i < sizeof(random_bytes); ++i)
+    {
+        id[2 * i] = hex[random_bytes[i] >> 4];
+        id[2 * i + 1] = hex[random_bytes[i] & 0x0F];
+    }
+}
+
+static bool controller_id_valid(const unsigned char id[32])
+{
+    if (id[0] == '\0')
+        return false;
+
+    for (size_t i = 0; i < 32; ++i)
+    {
+        if (id[i] == '\0')
+            return true;
+
+        if (id[i] < 0x21 || id[i] > 0x7E)
+            return false;
+    }
+
+    return false;
+}
 
 static esp_err_t init_nvs(void)
 {
@@ -209,49 +242,92 @@ void app_main(void)
     }
 
     esp_err_t dev_result = stor_load(&s_device);
+    bool save_device = false;
 
     if (dev_result == ESP_OK)
     {
         ESP_LOGI(TAG, "Device loaded successfully");
 
-        ESP_LOGI(TAG, "Device name: %s", s_device.name);
 
-        ESP_LOGI(TAG, "Controller ID: %s",
-                 s_device.controller_id);
-    }
-    else if (dev_result == ESP_ERR_NVS_NOT_FOUND ||
-             dev_result == ESP_ERR_INVALID_RESPONSE ||
-             dev_result == ESP_ERR_INVALID_SIZE)
-    {
-        ESP_LOGW(TAG, "Device record missing or invalid, creating default");
-
-        s_device = (Device){
-            .type = DEVICE_TYPE_WATER,
-            .id = 0,
-            .room_id = 0,
-            .name = "Water Controller",
-            .controller_id = "ESP32-S2-001",
-            .online = false,
-            .data.water = {
-                .power_on = false,
-                .water_level = 0}};
-
-        dev_result = stor_save(&s_device);
-        if (dev_result != ESP_OK)
+        if (!controller_id_valid(s_device.controller_id))
         {
-            ESP_LOGE(TAG, "Failed to save default device: %s",
-                     esp_err_to_name(dev_result));
-            return;
+            ESP_LOGW(TAG, "Invalid controller ID; generating text ID");
+            generate_controller_id(s_device.controller_id);
+            save_device = true;
+        }
+        else
+        {
+            /*
+            * Android дополняет ID нулями до 32 байт.
+            * Убираем возможный мусор после '\0',
+            * чтобы memcmp всех 32 байт работал корректно.
+            */
+            size_t length = strlen((const char *)s_device.controller_id);
+
+            for (size_t i = length + 1;
+                i < sizeof(s_device.controller_id);
+                ++i)
+            {
+                if (s_device.controller_id[i] != 0)
+                {
+                    s_device.controller_id[i] = 0;
+                    save_device = true;
+                }
+            }
         }
 
-        ESP_LOGI(TAG, "Default Device saved");
+        /* Защита строкового вывода имени. */
+        if (s_device.name[sizeof(s_device.name) - 1] != '\0')
+        {
+            s_device.name[sizeof(s_device.name) - 1] = '\0';
+            save_device = true;
+        }
+    }
+    else if (dev_result == ESP_ERR_NVS_NOT_FOUND ||
+            dev_result == ESP_ERR_INVALID_RESPONSE ||
+            dev_result == ESP_ERR_INVALID_SIZE)
+    {
+        ESP_LOGW(TAG, "Device record missing or invalid; creating default");
+
+        s_device = (Device){
+            .type = DEVICE_TYPE_LIGHT,
+            .id = 0,
+            .room_id = 0,
+            .name = "Light Controller",
+            .online = false,
+            .data.light = {
+                .power_on = false,
+                .bright = 0
+            }
+        };
+
+        generate_controller_id(s_device.controller_id);
+        save_device = true;
     }
     else
     {
         ESP_LOGE(TAG, "Failed to load Device: %s",
-                 esp_err_to_name(dev_result));
+                esp_err_to_name(dev_result));
         return;
     }
+
+    if (save_device)
+    {
+        dev_result = stor_save(&s_device);
+
+        if (dev_result != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to save Device: %s",
+                    esp_err_to_name(dev_result));
+            return;
+        }
+    }
+
+    ESP_LOGI(TAG, "Device name: %s", s_device.name);
+    ESP_LOGI(TAG, "Controller ID: %s", (const char *)s_device.controller_id);
+
+
+    
     ESP_LOGI(TAG, "Connecting to WiFi");
 
     esp_err_t wifi_result = wifi_init(
@@ -302,5 +378,4 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "WiFi result: %s", esp_err_to_name(wifi_result));
-
 }

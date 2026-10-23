@@ -11,11 +11,12 @@
 #include "lwip/inet.h"
 #include "lwip/sockets.h"
 
+#include "control_device.h"
+
 static const char *TAG = "TCP_SERVICE";
 
-
 static int server_socket = -1;
-static const Device *current_device;
+static Device *current_device;
 
 static bool send_all(int socket_fd, const void *data, size_t length)
 {
@@ -28,6 +29,22 @@ static bool send_all(int socket_fd, const void *data, size_t length)
         if (count <= 0)
             return false;
         sent += (size_t)count;
+    }
+
+    return true;
+}
+
+static bool recv_all(int sock, uint8_t *buff, size_t length)
+{
+    size_t got = 0;
+    while (got < length)
+    {
+        int n = recv(sock, buff + got, length - got, 0);
+        if (n <= 0)
+        {
+            return false;
+        }
+        got += (size_t)n;
     }
 
     return true;
@@ -47,28 +64,76 @@ static void tcp_service_task(void *arg)
             continue;
         }
 
-        struct timeval timeout = { .tv_sec = 5, .tv_usec = 0 };
+        struct timeval timeout = {.tv_sec = 5, .tv_usec = 0};
         setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
         setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-        uint8_t command;
-        int count = recv(client, &command, sizeof(command), 0);
-        if (count == 1 && command == TCP_CMD_READ_DEVICE)
+        uint8_t request[REQUEST_SIZE] = {0};
+        if (!recv_all(client, request, 1))
         {
-            Device snapshot = *current_device;
-            if (!send_all(client, &snapshot, sizeof(snapshot)))
-                ESP_LOGW(TAG, "send failed: %d", errno);
+            ESP_LOGW(TAG, "Failed to read command");
+            close(client);
+            continue;
         }
-        else if (count > 0)
+        size_t request_length;
+
+        switch (request[0])
         {
-            ESP_LOGW(TAG, "Unknown command: 0x%02x", command);
+        case 0x01: /* READ_DEVICE */
+            request_length = 1;
+            break;
+
+        case 0x02: /* READ_WATER_LEVEL */
+            request_length = 33;
+            break;
+
+        case 0x03: /* SET_LIGHT_STATE */
+            request_length = 35;
+            break;
+
+        case 0x04: /* SET_RELAY_STATE */
+            request_length = 34;
+            break;
+
+        default:
+            ESP_LOGW(
+                TAG, "Unknown command: 0x%02x",
+                (unsigned int)request[0]
+            );
+            close(client);
+            continue;
+        }
+
+        /* Для READ_DEVICE больше ничего читать не нужно. */
+        if (request_length > 1 && !recv_all(client, request + 1, request_length - 1))
+        {
+            ESP_LOGW(TAG, "Incomplete request for command 0x%02x",(unsigned int)request[0]);
+            close(client);
+            continue;
+        }
+
+        esp_err_t err = command_processing(
+            request,
+            request_length,
+            current_device,
+            client,
+            send_all
+        );
+
+        if (err != ESP_OK)
+        {
+            ESP_LOGW(
+                TAG, "Command 0x%02x failed: %s",
+                (unsigned int)request[0],
+                esp_err_to_name(err)
+            );
         }
 
         close(client);
     }
 }
 
-esp_err_t tcp_service_start(const Device *device)
+esp_err_t tcp_service_start(Device *device)
 {
     if (device == NULL)
         return ESP_ERR_INVALID_ARG;
