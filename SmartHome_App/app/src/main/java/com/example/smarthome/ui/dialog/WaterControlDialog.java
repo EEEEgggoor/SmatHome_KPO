@@ -28,10 +28,9 @@ public class WaterControlDialog
     public interface WaterControlListener
     {
         /**
-         * Вызывается при нажатии «Открыть» или «Закрыть».
-         * Верните null, если запрос принят, иначе текст ошибки для показа в диалоге.
+         * Вызывается при нажатии «Открыть» или «Закрыть». Результат нужно сообщить через result.
          */
-        String onValveRequested(boolean open);
+        void onValveRequested(boolean open, ControlResultCallback result);
     }
 
     private static final long REFRESH_PERIOD_MS = 5000L;
@@ -46,10 +45,14 @@ public class WaterControlDialog
     private LinearProgressIndicator progressWaterLevel;
     private TextView textWaterLevel;
     private TextView textWaterStatus;
-    private TextView textWaterTemperature;
     private TextView textWaterUpdated;
     private TextView textValveState;
     private TextView textError;
+    private LinearProgressIndicator progressControl;
+    private MaterialButton buttonValveOpen;
+    private MaterialButton buttonValveClose;
+    private boolean online;
+    private boolean closed;
     private AlertDialog dialog;
 
     public WaterControlDialog(Context context, WaterDevice device, WaterControlListener listener)
@@ -70,18 +73,19 @@ public class WaterControlDialog
         progressWaterLevel = contentView.findViewById(R.id.progressWaterLevel);
         textWaterLevel = contentView.findViewById(R.id.textWaterLevel);
         textWaterStatus = contentView.findViewById(R.id.textWaterStatus);
-        textWaterTemperature = contentView.findViewById(R.id.textWaterTemperature);
         textWaterUpdated = contentView.findViewById(R.id.textWaterUpdated);
         textValveState = contentView.findViewById(R.id.textValveState);
         textError = contentView.findViewById(R.id.textControlError);
+        progressControl = contentView.findViewById(R.id.progressControl);
         TextView textNotice = contentView.findViewById(R.id.textControlNotice);
-        MaterialButton buttonValveOpen = contentView.findViewById(R.id.buttonValveOpen);
-        MaterialButton buttonValveClose = contentView.findViewById(R.id.buttonValveClose);
+        buttonValveOpen = contentView.findViewById(R.id.buttonValveOpen);
+        buttonValveClose = contentView.findViewById(R.id.buttonValveClose);
 
         showReadings();
 
         // Без связи показания остаются последними известными, но клапаном управлять нельзя.
-        if (!device.isOnline())
+        online = device.isOnline();
+        if (!online)
         {
             textNotice.setVisibility(View.VISIBLE);
             buttonValveOpen.setEnabled(false);
@@ -116,6 +120,7 @@ public class WaterControlDialog
             @Override
             public void onDismiss(DialogInterface dialogInterface)
             {
+                closed = true;
                 handler.removeCallbacks(refresher);
             }
         });
@@ -127,17 +132,49 @@ public class WaterControlDialog
     private void requestValve(boolean open)
     {
         textError.setVisibility(View.GONE);
+        setPending(true);
 
-        String errorText = listener.onValveRequested(open);
-        if (errorText == null)
+        listener.onValveRequested(open, new ControlResultCallback()
         {
-            dialog.dismiss();
+            @Override
+            public void onSuccess()
+            {
+                if (closed)
+                {
+                    return;
+                }
+                dialog.dismiss();
+            }
+
+            @Override
+            public void onFailure(String message)
+            {
+                if (closed)
+                {
+                    return;
+                }
+                setPending(false);
+                textError.setText(message);
+                textError.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    // Пока команда клапана выполняется, обе кнопки недоступны.
+    private void setPending(boolean pending)
+    {
+        if (pending)
+        {
+            progressControl.setVisibility(View.VISIBLE);
         }
         else
         {
-            textError.setText(errorText);
-            textError.setVisibility(View.VISIBLE);
+            progressControl.setVisibility(View.GONE);
         }
+
+        boolean enabled = online && !pending;
+        buttonValveOpen.setEnabled(enabled);
+        buttonValveClose.setEnabled(enabled);
     }
 
     // Читает показания из модели и выводит их. Отсутствие данных не превращается в 0.
@@ -156,7 +193,6 @@ public class WaterControlDialog
         }
 
         textWaterStatus.setText(formatter.formatLevelStatus(device.getLevelStatus()));
-        textWaterTemperature.setText(formatter.formatTemperature(device.getTemperature()));
         textWaterUpdated.setText(formatter.formatLastUpdate(device.getLastUpdate()));
 
         String valveText = formatter.formatValveState(device.getValveOpen());

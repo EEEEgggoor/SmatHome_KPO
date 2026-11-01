@@ -14,21 +14,22 @@ import com.example.smarthome.model.RelayDevice;
 import com.example.smarthome.presentation.DeviceValueFormatter;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
 
 /**
  * Управление реле: включено или выключено.
  * Состояние контакта не показываем: схема подключения реле пока не согласована.
- * Переключатель — черновик, применяется по «Сохранить». Модель диалог не меняет.
+ * Переключатель — черновик, применяется по «Сохранить». После нажатия показывается ожидание,
+ * диалог закрывается только по подтверждению. Модель диалог не меняет.
  */
 public class RelayControlDialog
 {
     public interface RelayControlListener
     {
         /**
-         * Вызывается при нажатии «Сохранить».
-         * Верните null, если запрос принят, иначе текст ошибки для показа в диалоге.
+         * Вызывается при нажатии «Сохранить». Результат нужно сообщить через result.
          */
-        String onRelayApplyRequested(boolean poweredOn);
+        void onRelayApplyRequested(boolean poweredOn, ControlResultCallback result);
     }
 
     private final Context context;
@@ -38,7 +39,11 @@ public class RelayControlDialog
 
     private MaterialSwitch switchPower;
     private TextView textError;
+    private LinearProgressIndicator progressControl;
+    private Button saveButton;
     private AlertDialog dialog;
+    private boolean online;
+    private boolean closed;
 
     public RelayControlDialog(Context context, RelayDevice device, RelayControlListener listener)
     {
@@ -57,6 +62,7 @@ public class RelayControlDialog
         View contentView = LayoutInflater.from(context).inflate(R.layout.dialog_relay_control, null);
         switchPower = contentView.findViewById(R.id.switchRelayPower);
         textError = contentView.findViewById(R.id.textControlError);
+        progressControl = contentView.findViewById(R.id.progressControl);
         TextView textCurrentState = contentView.findViewById(R.id.textRelayCurrentState);
         TextView textNotice = contentView.findViewById(R.id.textControlNotice);
 
@@ -65,7 +71,7 @@ public class RelayControlDialog
         String powerText = formatter.formatPowerState(device.isPoweredOn());
         textCurrentState.setText(context.getString(R.string.haven_relay_current_state, powerText));
 
-        final boolean online = device.isOnline();
+        online = device.isOnline();
         if (!online)
         {
             textNotice.setVisibility(View.VISIBLE);
@@ -84,7 +90,7 @@ public class RelayControlDialog
             @Override
             public void onShow(DialogInterface dialogInterface)
             {
-                Button saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
                 saveButton.setEnabled(online);
                 saveButton.setOnClickListener(new View.OnClickListener()
                 {
@@ -97,22 +103,62 @@ public class RelayControlDialog
             }
         });
 
+        dialog.setOnDismissListener(new DialogInterface.OnDismissListener()
+        {
+            @Override
+            public void onDismiss(DialogInterface dialogInterface)
+            {
+                closed = true;
+            }
+        });
+
         dialog.show();
     }
 
     private void applyDraft()
     {
         textError.setVisibility(View.GONE);
+        setPending(true);
 
-        String errorText = listener.onRelayApplyRequested(switchPower.isChecked());
-        if (errorText == null)
+        listener.onRelayApplyRequested(switchPower.isChecked(), new ControlResultCallback()
         {
-            dialog.dismiss();
+            @Override
+            public void onSuccess()
+            {
+                if (closed)
+                {
+                    return;
+                }
+                dialog.dismiss();
+            }
+
+            @Override
+            public void onFailure(String message)
+            {
+                if (closed)
+                {
+                    return;
+                }
+                setPending(false);
+                textError.setText(message);
+                textError.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void setPending(boolean pending)
+    {
+        if (pending)
+        {
+            progressControl.setVisibility(View.VISIBLE);
         }
         else
         {
-            textError.setText(errorText);
-            textError.setVisibility(View.VISIBLE);
+            progressControl.setVisibility(View.GONE);
         }
+
+        boolean editable = online && !pending;
+        switchPower.setEnabled(editable);
+        saveButton.setEnabled(editable);
     }
 }

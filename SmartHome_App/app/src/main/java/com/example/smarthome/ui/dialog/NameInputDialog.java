@@ -15,22 +15,20 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
-import java.util.Objects;
-
 /**
  * Общий диалог ввода названия: новая комната, переименование комнаты и устройства.
  * Сам название не проверяет и не сохраняет: он передаёт введённый текст слушателю.
- * Если слушатель вернул текст ошибки, диалог остаётся открытым и показывает её.
+ * Пока слушатель не сообщил результат, кнопка и поле недоступны.
+ * При успехе диалог закрывается, при ошибке остаётся открытым и показывает её текст.
  */
 public class NameInputDialog
 {
     public interface NameListener
     {
         /**
-         * Вызывается при нажатии на кнопку подтверждения.
-         * Верните null, если название принято, иначе текст ошибки для показа в диалоге.
+         * Вызывается при нажатии на кнопку подтверждения. Результат нужно сообщить через result.
          */
-        String onNameEntered(String name);
+        void onNameEntered(String name, ControlResultCallback result);
     }
 
     /**
@@ -71,14 +69,25 @@ public class NameInputDialog
         builder.setNegativeButton(R.string.haven_cancel, null);
 
         final AlertDialog dialog = builder.create();
-        Objects.requireNonNull(dialog.getWindow()).setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+
+        // Результат, пришедший после закрытия диалога, игнорируем.
+        final boolean[] closed = new boolean[1];
+        dialog.setOnDismissListener(new DialogInterface.OnDismissListener()
+        {
+            @Override
+            public void onDismiss(DialogInterface dialogInterface)
+            {
+                closed[0] = true;
+            }
+        });
 
         dialog.setOnShowListener(new DialogInterface.OnShowListener()
         {
             @Override
             public void onShow(DialogInterface dialogInterface)
             {
-                Button confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                final Button confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
                 confirmButton.setOnClickListener(new View.OnClickListener()
                 {
                     @Override
@@ -92,15 +101,34 @@ public class NameInputDialog
                             enteredName = editName.getText().toString();
                         }
 
-                        String errorText = listener.onNameEntered(enteredName);
-                        if (errorText == null)
+                        // Пока идёт сохранение, повторное нажатие и правка названия недоступны.
+                        confirmButton.setEnabled(false);
+                        editName.setEnabled(false);
+
+                        listener.onNameEntered(enteredName, new ControlResultCallback()
                         {
-                            dialog.dismiss();
-                        }
-                        else
-                        {
-                            inputLayout.setError(errorText);
-                        }
+                            @Override
+                            public void onSuccess()
+                            {
+                                if (closed[0])
+                                {
+                                    return;
+                                }
+                                dialog.dismiss();
+                            }
+
+                            @Override
+                            public void onFailure(String message)
+                            {
+                                if (closed[0])
+                                {
+                                    return;
+                                }
+                                confirmButton.setEnabled(true);
+                                editName.setEnabled(true);
+                                inputLayout.setError(message);
+                            }
+                        });
                     }
                 });
                 editName.requestFocus();

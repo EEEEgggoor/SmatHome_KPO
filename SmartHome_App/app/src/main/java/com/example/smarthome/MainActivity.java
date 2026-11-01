@@ -30,6 +30,7 @@ import com.example.smarthome.model.WaterDevice;
 import com.example.smarthome.model.Room;
 import com.example.smarthome.ui.adapter.DeviceAdapter;
 import com.example.smarthome.ui.adapter.RoomAdapter;
+import com.example.smarthome.ui.dialog.ControlResultCallback;
 import com.example.smarthome.ui.dialog.LightControlDialog;
 import com.example.smarthome.ui.dialog.AddEspDeviceDialog;
 import com.example.smarthome.ui.dialog.NameInputDialog;
@@ -54,9 +55,13 @@ public class MainActivity extends AppCompatActivity
     // Ограничение длины названия комнаты совпадает с проверкой в Room.setName.
     private static final int ROOM_NAME_MAX_LENGTH = 24;
 
+    // Ключ для сохранения выбранной комнаты при пересоздании экрана (например, при повороте).
+    private static final String STATE_SELECTED_ROOM_ID = "selectedRoomId";
+
     private TextView textDate;
     private TextView textGreeting;
     private TextView textDevicesCount;
+    private TextView textEmptyState;
     private RecyclerView recyclerRooms;
     private RoomAdapter roomAdapter;
     private DeviceAdapter deviceAdapter;
@@ -64,6 +69,8 @@ public class MainActivity extends AppCompatActivity
     private DeviceControlService controlService;
     private final Map<Integer, ControllerGateway.Subscription> subscriptions = new HashMap<>();
     private boolean started;
+    // До первой загрузки подсказку «устройств нет» не показываем, чтобы она не мигала.
+    private boolean devicesLoaded;
 
     private List<Room> rooms = new ArrayList<Room>();
     private List<Device> devices = new ArrayList<Device>();
@@ -95,12 +102,25 @@ public class MainActivity extends AppCompatActivity
         textDate = findViewById(R.id.textDate);
         textGreeting = findViewById(R.id.textGreeting);
         textDevicesCount = findViewById(R.id.textDevicesCount);
+        textEmptyState = findViewById(R.id.textEmptyState);
+
+        if (savedInstanceState != null)
+        {
+            selectedRoomId = savedInstanceState.getInt(STATE_SELECTED_ROOM_ID, RoomAdapter.ALL_DEVICES_ID);
+        }
 
         setupRoomList();
         setupDeviceList();
         setupAddDeviceButton();
         showDateAndGreeting();
         refreshScreen();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+        outState.putInt(STATE_SELECTED_ROOM_ID, selectedRoomId);
     }
 
     @Override protected void onStart() {
@@ -120,6 +140,7 @@ public class MainActivity extends AppCompatActivity
             @Override public void onSuccess(List<Room> saved) {
                 if (!started) return;
                 rooms = saved;
+                resetSelectionIfRoomMissing();
                 refreshScreen();
             }
             @Override public void onError(Exception error) { showError(error); }
@@ -128,12 +149,36 @@ public class MainActivity extends AppCompatActivity
             @Override public void onSuccess(List<Device> saved) {
                 if (!started) return;
                 devices = saved;
+                devicesLoaded = true;
                 refreshScreen();
                 clearSubscriptions();
                 for (Device device : devices) observeDevice(device);
             }
             @Override public void onError(Exception error) { showError(error); }
         });
+    }
+
+    // Выбранную комнату могли удалить, пока экран был закрыт.
+    private void resetSelectionIfRoomMissing()
+    {
+        if (selectedRoomId == RoomAdapter.ALL_DEVICES_ID)
+        {
+            return;
+        }
+
+        boolean found = false;
+        for (Room room : rooms)
+        {
+            if (room.getId() == selectedRoomId)
+            {
+                found = true;
+            }
+        }
+
+        if (!found)
+        {
+            selectedRoomId = RoomAdapter.ALL_DEVICES_ID;
+        }
     }
 
     private void observeDevice(Device device) {
@@ -165,7 +210,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void showError(Exception error) {
-        if (started) Toast.makeText(this, error.getMessage() == null ? "Ошибка" : error.getMessage(),
+        if (started) Toast.makeText(this, error.getMessage() == null ? getString(R.string.haven_error_unknown) : error.getMessage(),
                 Toast.LENGTH_LONG).show();
     }
 
@@ -344,6 +389,27 @@ public class MainActivity extends AppCompatActivity
         roomAdapter.setData(rooms, deviceCounts, devices.size(), selectedRoomId);
         deviceAdapter.setData(visibleDevices, roomNames);
         textDevicesCount.setText(getString(R.string.haven_devices_online, onlineCount));
+        showEmptyState(visibleDevices.isEmpty());
+    }
+
+    // Подсказка при пустом списке. Показывается только после первой загрузки из базы.
+    private void showEmptyState(boolean listIsEmpty)
+    {
+        if (!devicesLoaded || !listIsEmpty)
+        {
+            textEmptyState.setVisibility(View.GONE);
+            return;
+        }
+
+        if (devices.isEmpty())
+        {
+            textEmptyState.setText(R.string.haven_empty_no_devices);
+        }
+        else
+        {
+            textEmptyState.setText(R.string.haven_empty_room);
+        }
+        textEmptyState.setVisibility(View.VISIBLE);
     }
 
     // Нажатие на карточку открывает диалог управления по типу устройства.
@@ -364,14 +430,17 @@ public class MainActivity extends AppCompatActivity
     }
 
     // Свет управляется TCP-командой 0x03: ID, питание и яркость.
-    private void showLightControlDialog(LightDevice device)
+    // Диалог закроется только после подтверждения устройства и сохранения состояния.
+    private void showLightControlDialog(final LightDevice device)
     {
         LightControlDialog dialog = new LightControlDialog(this, device,
                 new LightControlDialog.LightControlListener()
                 {
                     @Override
-                    public String onLightApplyRequested(boolean poweredOn, int brightness)
+                    public void onLightApplyRequested(boolean poweredOn, int brightness,
+                                                      final ControlResultCallback result)
                     {
+                        // Температура света в диалоге не настраивается: передаём прежнее значение.
                         controlService.setLightState(device, poweredOn, brightness,
                                 device.getLightTemperature(),
                                 new DeviceControlService.Callback<LightDevice>()
@@ -380,53 +449,117 @@ public class MainActivity extends AppCompatActivity
                                     public void onSuccess(LightDevice saved)
                                     {
                                         replaceDevice(saved);
+                                        result.onSuccess();
                                     }
 
                                     @Override
                                     public void onError(Exception error)
                                     {
-                                        showError(error);
+                                        result.onFailure(getCommandErrorText(error));
                                     }
 
                                     @Override
                                     public void onStateSaveError(LightDevice confirmed, Exception error)
                                     {
-                                        replaceDevice(confirmed);
-                                        showError(error);
+                                        handleStateSaveError(confirmed, error, result);
                                     }
                                 });
-                        return null;
                     }
                 });
         dialog.show();
     }
 
-    private void showRelayControlDialog(RelayDevice device)
+    private void showRelayControlDialog(final RelayDevice device)
     {
         RelayControlDialog dialog = new RelayControlDialog(this, device,
                 new RelayControlDialog.RelayControlListener()
                 {
                     @Override
-                    public String onRelayApplyRequested(boolean poweredOn)
+                    public void onRelayApplyRequested(boolean poweredOn,
+                                                      final ControlResultCallback result)
                     {
-                        return getString(R.string.haven_control_unavailable);
+                        controlService.setRelayState(device, poweredOn,
+                                new DeviceControlService.Callback<RelayDevice>()
+                                {
+                                    @Override
+                                    public void onSuccess(RelayDevice saved)
+                                    {
+                                        replaceDevice(saved);
+                                        result.onSuccess();
+                                    }
+
+                                    @Override
+                                    public void onError(Exception error)
+                                    {
+                                        result.onFailure(getCommandErrorText(error));
+                                    }
+
+                                    @Override
+                                    public void onStateSaveError(RelayDevice confirmed, Exception error)
+                                    {
+                                        handleStateSaveError(confirmed, error, result);
+                                    }
+                                });
                     }
                 });
         dialog.show();
     }
 
-    private void showWaterControlDialog(WaterDevice device)
+    // Клапан: сервис вызывает gateway; если прошивка команду не поддерживает, придёт ошибка.
+    private void showWaterControlDialog(final WaterDevice device)
     {
         WaterControlDialog dialog = new WaterControlDialog(this, device,
                 new WaterControlDialog.WaterControlListener()
                 {
                     @Override
-                    public String onValveRequested(boolean open)
+                    public void onValveRequested(boolean open, final ControlResultCallback result)
                     {
-                        return getString(R.string.haven_control_unavailable);
+                        controlService.setValveOpen(device, open,
+                                new DeviceControlService.Callback<WaterDevice>()
+                                {
+                                    @Override
+                                    public void onSuccess(WaterDevice saved)
+                                    {
+                                        replaceDevice(saved);
+                                        result.onSuccess();
+                                    }
+
+                                    @Override
+                                    public void onError(Exception error)
+                                    {
+                                        result.onFailure(getCommandErrorText(error));
+                                    }
+
+                                    @Override
+                                    public void onStateSaveError(WaterDevice confirmed, Exception error)
+                                    {
+                                        handleStateSaveError(confirmed, error, result);
+                                    }
+                                });
                     }
                 });
         dialog.show();
+    }
+
+    // Текст ошибки команды для диалога. Тайм-аут не доказывает, что команда не выполнена,
+    // поэтому автоматического повтора нет: пользователь решает сам.
+    private String getCommandErrorText(Exception error)
+    {
+        String message = error.getMessage();
+        if (message == null || message.trim().isEmpty())
+        {
+            message = getString(R.string.haven_error_unknown);
+        }
+        return message;
+    }
+
+    // Устройство подтвердило команду, но запись в базу не удалась: показываем подтверждённое
+    // состояние, сообщаем об ошибке хранения и заново согласуем данные с базой.
+    private void handleStateSaveError(Device confirmed, Exception error, ControlResultCallback result)
+    {
+        replaceDevice(confirmed);
+        result.onFailure(getString(R.string.haven_error_state_save, getCommandErrorText(error)));
+        loadData();
     }
 
     // Меню «⋮» на карточке: переименование и удаление устройства.
@@ -467,22 +600,29 @@ public class MainActivity extends AppCompatActivity
                 device.getName(), 0, R.string.haven_save, new NameInputDialog.NameListener()
                 {
                     @Override
-                    public String onNameEntered(String name)
+                    public void onNameEntered(String name, final ControlResultCallback result)
                     {
-                        try
+                        if (name.trim().isEmpty())
                         {
-                            if (name.trim().isEmpty()) return getString(R.string.esp_need_name);
-                            repository.renameDevice(device.getId(), name, new RepositoryCallback<Device>() {
-                                @Override public void onSuccess(Device saved) { loadData(); }
-                                @Override public void onError(Exception error) { showError(error); }
-                            });
-                        }
-                        catch (IllegalArgumentException exception)
-                        {
-                            return getErrorText(exception);
+                            result.onFailure(getString(R.string.esp_need_name));
+                            return;
                         }
 
-                        return null;
+                        repository.renameDevice(device.getId(), name, new RepositoryCallback<Device>()
+                        {
+                            @Override
+                            public void onSuccess(Device saved)
+                            {
+                                loadData();
+                                result.onSuccess();
+                            }
+
+                            @Override
+                            public void onError(Exception error)
+                            {
+                                result.onFailure(getSaveErrorText(error));
+                            }
+                        });
                     }
                 });
     }
@@ -547,25 +687,31 @@ public class MainActivity extends AppCompatActivity
                 "", ROOM_NAME_MAX_LENGTH, R.string.haven_create, new NameInputDialog.NameListener()
                 {
                     @Override
-                    public String onNameEntered(String name)
+                    public void onNameEntered(String name, final ControlResultCallback result)
                     {
-                        try
+                        if (name.trim().isEmpty())
                         {
-                            if (name.trim().isEmpty()) return getString(R.string.haven_error_name_invalid);
-                            repository.addRoom(name, new RepositoryCallback<Room>() {
-                                @Override public void onSuccess(Room saved) {
-                                    loadData();
-                                    recyclerRooms.smoothScrollToPosition(rooms.size());
-                                }
-                                @Override public void onError(Exception error) { showError(error); }
-                            });
-                        }
-                        catch (IllegalArgumentException exception)
-                        {
-                            return getErrorText(exception);
+                            result.onFailure(getString(R.string.haven_error_name_invalid));
+                            return;
                         }
 
-                        return null;
+                        repository.addRoom(name, new RepositoryCallback<Room>()
+                        {
+                            @Override
+                            public void onSuccess(Room saved)
+                            {
+                                loadData();
+                                // Новый чип стоит после последней комнаты: показываем его.
+                                recyclerRooms.smoothScrollToPosition(rooms.size() + 1);
+                                result.onSuccess();
+                            }
+
+                            @Override
+                            public void onError(Exception error)
+                            {
+                                result.onFailure(getSaveErrorText(error));
+                            }
+                        });
                     }
                 });
     }
@@ -576,22 +722,29 @@ public class MainActivity extends AppCompatActivity
                 room.getName(), ROOM_NAME_MAX_LENGTH, R.string.haven_save, new NameInputDialog.NameListener()
                 {
                     @Override
-                    public String onNameEntered(String name)
+                    public void onNameEntered(String name, final ControlResultCallback result)
                     {
-                        try
+                        if (name.trim().isEmpty())
                         {
-                            if (name.trim().isEmpty()) return getString(R.string.haven_error_name_invalid);
-                            repository.renameRoom(room.getId(), name, new RepositoryCallback<Room>() {
-                                @Override public void onSuccess(Room saved) { loadData(); }
-                                @Override public void onError(Exception error) { showError(error); }
-                            });
-                        }
-                        catch (IllegalArgumentException exception)
-                        {
-                            return getErrorText(exception);
+                            result.onFailure(getString(R.string.haven_error_name_invalid));
+                            return;
                         }
 
-                        return null;
+                        repository.renameRoom(room.getId(), name, new RepositoryCallback<Room>()
+                        {
+                            @Override
+                            public void onSuccess(Room saved)
+                            {
+                                loadData();
+                                result.onSuccess();
+                            }
+
+                            @Override
+                            public void onError(Exception error)
+                            {
+                                result.onFailure(getSaveErrorText(error));
+                            }
+                        });
                     }
                 });
     }
@@ -636,12 +789,13 @@ public class MainActivity extends AppCompatActivity
         });
     }
 
-    private String getErrorText(IllegalArgumentException exception)
+    // Текст ошибки сохранения названия, комнаты или устройства для показа в диалоге.
+    private String getSaveErrorText(Exception error)
     {
-        String message = exception.getMessage();
-        if (message == null)
+        String message = error.getMessage();
+        if (message == null || message.trim().isEmpty())
         {
-            message = getString(R.string.haven_error_name_invalid);
+            message = getString(R.string.haven_error_save_failed);
         }
         return message;
     }

@@ -82,4 +82,9 @@
     <string name="esp_network">Подключение к Wi-Fi…</string>
     <string name="esp_reading">Чтение состояния ESP32-S2…</string>
     <string name="esp_network_permission">Разрешите доступ к локальной сети для поиска ESP32-S2.</string>
+    <string name="haven_error_unknown">Не удалось выполнить команду</string>
+    <string name="haven_error_state_save">Устройство подтвердило команду, но состояние не сохранено: %1$s</string>
+    <string name="haven_empty_no_devices">Устройств пока нет. Нажмите «Добавить устройство», чтобы подключить первое.</string>
+    <string name="haven_empty_room">В этой комнате пока нет устройств.</string>
+    <string name="haven_error_save_failed">Не удалось сохранить изменения</string>
 </resources>
