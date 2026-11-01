@@ -9,7 +9,7 @@ void start_mdns_service(void)
     {
         return;
     }
-    //Инициализация mDNS
+    // Инициализация mDNS
     esp_err_t err = mdns_init();
     if (err != ESP_OK)
     {
@@ -25,5 +25,4 @@ void start_mdns_service(void)
         "smart_home_device", "_smarthome", "_tcp", TCP_SERVICE_PORT, NULL, 0));
 
     service_started = true;
-
 }

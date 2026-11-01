@@ -2,6 +2,7 @@
 #define CONTROL_DEVICE_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include "esp_err.h"
 #include "device.h"
 
@@ -15,6 +16,8 @@
 #define CMD_WATER 0x02
 #define CMD_LIGHT 0x03
 #define CMD_RELAY 0x04
+#define CMD_VALVE 0x05
+#define CMD_WATER_THRESHOLD 0x06
 
 #define PWM_GPIO 5
 #define LED_PWM_BITS LEDC_TIMER_13_BIT
@@ -24,7 +27,6 @@
 
 typedef bool (*send_fn_t)(int fd, const void *data, size_t len);
 
-
 esp_err_t light_pwm_init(void);
 
 esp_err_t command_processing(
@@ -32,7 +34,6 @@ esp_err_t command_processing(
     size_t request_length,
     Device *current_device,
     int client,
-    send_fn_t send_response
-);
+    send_fn_t send_response);
 
-#endif //CONTROL_DEVICE_H
+#endif // CONTROL_DEVICE_H

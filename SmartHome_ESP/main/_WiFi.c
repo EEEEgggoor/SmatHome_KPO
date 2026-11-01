@@ -18,7 +18,6 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-
 #define MAX_RETRY 10
 #define WIFI_CONNBIT BIT0
 #define WIFI_FAIL_BIT BIT1
@@ -93,7 +92,6 @@ static void event_handler(
                 s_wifi_event_group,
                 WIFI_FAIL_BIT);
         }
-
     }
 
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
@@ -106,8 +104,6 @@ static void event_handler(
         ESP_LOGI(TAG_WIFI, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
 
         s_retry_num = 0;
-
-
 
         xEventGroupClearBits(
             s_wifi_event_group,

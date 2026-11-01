@@ -91,6 +91,8 @@ static void tcp_service_task(void *arg)
             request_length = 35;
             break;
 
+        case CMD_VALVE:
+        case CMD_WATER_THRESHOLD:
         case 0x04: /* SET_RELAY_STATE */
             request_length = 34;
             break;
@@ -98,8 +100,7 @@ static void tcp_service_task(void *arg)
         default:
             ESP_LOGW(
                 TAG, "Unknown command: 0x%02x",
-                (unsigned int)request[0]
-            );
+                (unsigned int)request[0]);
             close(client);
             continue;
         }
@@ -107,7 +108,7 @@ static void tcp_service_task(void *arg)
         /* Для READ_DEVICE больше ничего читать не нужно. */
         if (request_length > 1 && !recv_all(client, request + 1, request_length - 1))
         {
-            ESP_LOGW(TAG, "Incomplete request for command 0x%02x",(unsigned int)request[0]);
+            ESP_LOGW(TAG, "Incomplete request for command 0x%02x", (unsigned int)request[0]);
             close(client);
             continue;
         }
@@ -117,16 +118,14 @@ static void tcp_service_task(void *arg)
             request_length,
             current_device,
             client,
-            send_all
-        );
+            send_all);
 
         if (err != ESP_OK)
         {
             ESP_LOGW(
                 TAG, "Command 0x%02x failed: %s",
                 (unsigned int)request[0],
-                esp_err_to_name(err)
-            );
+                esp_err_to_name(err));
         }
 
         close(client);

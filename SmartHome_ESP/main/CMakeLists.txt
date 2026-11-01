@@ -8,6 +8,8 @@ idf_component_register(
         "SH_mDns.c"
         "tcp_service.c"
         "control_device.c"
+        "device_io.c"
+        "water_policy.c"
 
     INCLUDE_DIRS
         "."
@@ -20,5 +22,5 @@ idf_component_register(
         esp_tinyusb
         lwip
 
-    PRIV_REQUIRES esp_driver_ledc esp_driver_gpio
+    PRIV_REQUIRES esp_driver_ledc esp_driver_gpio esp_adc
 )

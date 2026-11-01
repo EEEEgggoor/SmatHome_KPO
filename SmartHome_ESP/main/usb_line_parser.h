@@ -3,7 +3,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-typedef struct {
+typedef struct
+{
     char *lines[2];
     size_t capacities[2];
     size_t lengths[2];
