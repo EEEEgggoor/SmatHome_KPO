@@ -19,6 +19,7 @@
 #include "device_config.h"
 #include "device_io.h"
 #include "tcp_service.h"
+#include "log_forwarder.h"
 #include "SH_mDns.h"
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -191,6 +192,9 @@ static esp_err_t usb_read_two_lines(char *first, size_t first_size, char *second
 
 void app_main(void)
 {
+    esp_err_t log_forwarder_result = log_forwarder_start();
+    if (log_forwarder_result != ESP_OK)
+        ESP_LOGE(TAG, "Log forwarding unavailable: %s", esp_err_to_name(log_forwarder_result));
 
     ESP_LOGI(TAG, "Initializing TinyUSB");
 
@@ -381,6 +385,9 @@ void app_main(void)
 
         wifi_result = wifi_init(wifi_ssid, wifi_pass);
     }
+
+    if (log_forwarder_result == ESP_OK)
+        log_forwarder_set_network_ready();
 
     device_io_lock();
     s_device.online = true;

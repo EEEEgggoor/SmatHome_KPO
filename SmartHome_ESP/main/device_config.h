@@ -21,7 +21,7 @@
 #define WATER_ADC_WET 5000
 #define WATER_DEFAULT_THRESHOLD 80
 #define WATER_SAMPLE_MS 200
-#define WATER_LOG_RAW 0
+#define WATER_LOG_RAW 1 // Temporary: print ADC samples to USB CDC while diagnosing the sensor.
 
 #define SERVO_CLOSED_US 1000
 #define SERVO_OPEN_US 2000

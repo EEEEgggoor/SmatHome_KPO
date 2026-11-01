@@ -207,3 +207,10 @@ managed_components_backup_20261018_232809/
 SmartHome_ESP/test/run_tests.ps1
 SmartHome_ESP/docs/DEVICE_MODES.md
 SmartHome_ESP/docs/superpowers/plans/2026-11-01-device-modes.md
+SmartHome_ESP/docs/superpowers/plans/2026-11-01-wifi-log-server-ledger.md
+.gitignore
+SmartHome_ESP/docs/superpowers/specs/wifi-log-server.md
+SmartHome_ESP/docs/superpowers/plans/2026-11-01-wifi-log-server.md
+SmartHome_ESP/tools/log_server.py
+SmartHome_ESP/test/test_log_server.py
+SmartHome_ESP/tools/README-log-server.md
