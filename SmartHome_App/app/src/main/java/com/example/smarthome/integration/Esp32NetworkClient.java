@@ -135,6 +135,13 @@ final class Esp32NetworkClient {
         return commandClient.setRelayState(address, controllerId, poweredOn);
     }
 
+    Esp32Wire.Snapshot setValve(InetSocketAddress address, String id, boolean open, long deadline) throws IOException {
+        return new Esp32TcpClient(4000, 5000, deadline).setValve(address, id, open);
+    }
+    Esp32Wire.Snapshot setWaterThreshold(InetSocketAddress address, String id, int threshold, long deadline) throws IOException {
+        return new Esp32TcpClient(4000, 5000, deadline).setWaterThreshold(address, id, threshold);
+    }
+
     static final class Result {
         final InetSocketAddress address;
         final Esp32Wire.Snapshot snapshot;

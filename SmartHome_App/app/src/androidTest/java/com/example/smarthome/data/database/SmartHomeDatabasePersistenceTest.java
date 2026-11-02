@@ -94,6 +94,7 @@ public class SmartHomeDatabasePersistenceTest
                 true
         );
 
+        water.setCloseThreshold(73);
         water.setWaterLevel(64);
         water.setTemperature(22.4);
         water.setLastUpdate(1700000060000L);
@@ -149,6 +150,7 @@ public class SmartHomeDatabasePersistenceTest
         DeviceEntity reopenedWater = reopenedDeviceDao.getById(waterId);
 
         assertNotNull(reopenedWater);
+        assertEquals(Integer.valueOf(73), reopenedWater.getCloseThreshold());
         assertEquals("Датчик бака", reopenedWater.getName());
         assertEquals(roomId, reopenedWater.getRoomId());
         assertEquals("ESP32-WATER", reopenedWater.getControllerId());

@@ -64,6 +64,12 @@ public class DeviceEntity {
 
     @Nullable
     private Boolean valveOpen;
+    @Nullable private Integer closeThreshold;
+    @Nullable public Integer getCloseThreshold() { return closeThreshold; }
+    public void setCloseThreshold(@Nullable Integer value) {
+        if (value != null && (value < 1 || value > 100)) throw new IllegalArgumentException("Порог: 1–100%.");
+        closeThreshold = value;
+    }
 
     public DeviceEntity(
             int id,

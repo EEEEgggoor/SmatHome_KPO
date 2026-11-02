@@ -56,6 +56,18 @@ public final class Esp32Wire {
         return request;
     }
 
+    public static byte[] setValveRequest(String controllerId, boolean open) {
+        byte[] request = commandRequest((byte) 0x05, controllerId, 1);
+        request[33] = booleanByte(open);
+        return request;
+    }
+    public static byte[] setWaterThresholdRequest(String controllerId, int threshold) {
+        if (threshold < 1 || threshold > 100) throw new IllegalArgumentException("Порог: 1–100%.");
+        byte[] request = commandRequest((byte) 0x06, controllerId, 1);
+        request[33] = (byte) threshold;
+        return request;
+    }
+
     private static byte[] commandRequest(byte command, String controllerId, int valueSize)
     {
         if (controllerId == null || controllerId.trim().isEmpty()
@@ -109,11 +121,13 @@ public final class Esp32Wire {
             throw new IllegalArgumentException("ESP32-S2 не указал идентификатор.");
         }
         int value = data[78] & 0xff;
-        if (type == 0 || type == 2)
+        if (type == 0 || (type == 2 && value != 255))
         {
             checkPercentage(value);
         }
-        return new Snapshot(type, id, data[76] == 1, data[77] == 1, value);
+        int threshold = data[79] & 0xff;
+        if (type == 2 && threshold > 100) throw new IllegalArgumentException("Некорректный порог воды.");
+        return new Snapshot(type, id, data[76] == 1, data[77] == 1, value, type == 2 ? threshold : 0);
     }
 
     private static int int32(byte[] data, int at) {
@@ -137,14 +151,16 @@ public final class Esp32Wire {
         public final boolean poweredOn;
         /** Brightness for light, water level for water; raw firmware value. */
         public final int value;
+        public final int closeThreshold;
 
         private Snapshot(int type, String controllerId, boolean online,
-                         boolean poweredOn, int value) {
+                         boolean poweredOn, int value, int closeThreshold) {
             this.type = type;
             this.controllerId = controllerId;
             this.online = online;
             this.poweredOn = poweredOn;
             this.value = value;
+            this.closeThreshold = closeThreshold;
         }
     }
 }

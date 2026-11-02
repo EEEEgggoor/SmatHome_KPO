@@ -13,10 +13,16 @@ import androidx.room.RoomDatabase;
                 RoomEntity.class,
                 DeviceEntity.class
         },
-        version = 1,
+        version = 2,
         exportSchema = true
 )
 public abstract class SmartHomeDatabase extends  RoomDatabase{
+    public static final androidx.room.migration.Migration MIGRATION_1_2 =
+        new androidx.room.migration.Migration(1, 2) {
+            @Override public void migrate(@NonNull androidx.sqlite.db.SupportSQLiteDatabase db) {
+                db.execSQL("ALTER TABLE devices ADD COLUMN closeThreshold INTEGER");
+            }
+        };
     private static final String DATABASE_NAME = "smart_home.db";
     private static SmartHomeDatabase instance;
     public abstract RoomDao roomDao();
@@ -39,7 +45,7 @@ public abstract class SmartHomeDatabase extends  RoomDatabase{
                             SmartHomeDatabase.class,
                             DATABASE_NAME
                     );
-            instance = builder.build();
+            instance = builder.addMigrations(MIGRATION_1_2).build();
         }
         return instance;
     }

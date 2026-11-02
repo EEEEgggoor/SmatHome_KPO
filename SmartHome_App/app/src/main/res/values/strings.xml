@@ -1,4 +1,10 @@
 <resources>
     <string name="app_name">SmartHome</string>
     <string name="Name">Меня зовут Тимур</string>
+    <string name="water_threshold_label">Порог закрытия клапана</string>
+    <string name="water_threshold_save">Сохранить порог на ESP</string>
+    <string name="water_threshold_draft">Выбранный порог: %1$d%%</string>
+    <string name="water_threshold_confirmed">Порог на ESP: %1$d%%</string>
+    <string name="water_threshold_unknown" formatted="false">Порог ещё не получен. Выберите 1–100%.</string>
+    <string name="water_automatic_notice" formatted="false">При достижении порога ESP закрывает клапан без телефона. Повторное открытие — вручную, после снижения уровня минимум на 5 процентных пунктов (для порога 1–5% — на 1). Положение показано по команде сервоприводу, без датчика обратной связи.</string>
 </resources>

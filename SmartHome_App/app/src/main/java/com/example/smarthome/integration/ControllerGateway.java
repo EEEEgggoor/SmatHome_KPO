@@ -104,6 +104,11 @@ public interface ControllerGateway
             @NonNull Callback<WaterDevice> callback
     );
 
+    default void setWaterThreshold(long requestId, @NonNull WaterDevice device, int threshold,
+                                   @NonNull Callback<WaterDevice> callback) {
+        callback.onError(requestId, device.getId(), new UnsupportedOperationException("Порог не поддерживается."));
+    }
+
     /**
      * Начать получение событий существующего устройства.
      * Каждая подписка работает независимо от остальных.

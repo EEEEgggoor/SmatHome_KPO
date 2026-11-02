@@ -64,6 +64,7 @@ public class MainActivity extends AppCompatActivity
     private DeviceControlService controlService;
     private final Map<Integer, ControllerGateway.Subscription> subscriptions = new HashMap<>();
     private boolean started;
+    private WaterControlDialog waterDialog;
 
     private List<Room> rooms = new ArrayList<Room>();
     private List<Device> devices = new ArrayList<Device>();
@@ -111,6 +112,7 @@ public class MainActivity extends AppCompatActivity
 
     @Override protected void onStop() {
         started = false;
+        if (waterDialog != null) { waterDialog.dismiss(); waterDialog = null; }
         clearSubscriptions();
         super.onStop();
     }
@@ -155,6 +157,7 @@ public class MainActivity extends AppCompatActivity
 
     private void replaceDevice(Device updated) {
         if (!started) return;
+        if (waterDialog != null && updated instanceof WaterDevice) waterDialog.updateDevice((WaterDevice) updated);
         for (int index = 0; index < devices.size(); index++) {
             if (devices.get(index).getId() == updated.getId()) {
                 devices.set(index, updated);
@@ -401,32 +404,41 @@ public class MainActivity extends AppCompatActivity
         dialog.show();
     }
 
-    private void showRelayControlDialog(RelayDevice device)
-    {
-        RelayControlDialog dialog = new RelayControlDialog(this, device,
-                new RelayControlDialog.RelayControlListener()
-                {
-                    @Override
-                    public String onRelayApplyRequested(boolean poweredOn)
-                    {
-                        return getString(R.string.haven_control_unavailable);
-                    }
-                });
-        dialog.show();
+    private <T extends Device> DeviceControlService.Callback<T> controlCallback() {
+        return new DeviceControlService.Callback<T>() {
+            @Override public void onSuccess(T saved) { replaceDevice(saved); }
+            @Override public void onError(Exception error) { showError(error); }
+            @Override public void onStateSaveError(T confirmed, Exception error) {
+                replaceDevice(confirmed); showError(error);
+            }
+        };
     }
 
-    private void showWaterControlDialog(WaterDevice device)
-    {
-        WaterControlDialog dialog = new WaterControlDialog(this, device,
-                new WaterControlDialog.WaterControlListener()
-                {
-                    @Override
-                    public String onValveRequested(boolean open)
-                    {
-                        return getString(R.string.haven_control_unavailable);
-                    }
-                });
-        dialog.show();
+    private void showRelayControlDialog(RelayDevice device) {
+        new RelayControlDialog(this, device, poweredOn -> {
+            controlService.setRelayState(device, poweredOn, controlCallback());
+            return null;
+        }).show();
+    }
+
+    private void showWaterControlDialog(WaterDevice device) {
+        waterDialog = new WaterControlDialog(this, device, new WaterControlDialog.WaterControlListener() {
+            @Override public String onValveRequested(boolean open) {
+                controlService.setValveOpen(currentWater(device), open, controlCallback());
+                return null;
+            }
+            @Override public String onThresholdRequested(int threshold) {
+                controlService.setWaterThreshold(currentWater(device), threshold, controlCallback());
+                return null;
+            }
+        });
+        waterDialog.show();
+    }
+
+    private WaterDevice currentWater(WaterDevice fallback) {
+        for (Device device : devices) if (device.getId() == fallback.getId() && device instanceof WaterDevice)
+            return (WaterDevice) device;
+        return fallback;
     }
 
     // Меню «⋮» на карточке: переименование и удаление устройства.

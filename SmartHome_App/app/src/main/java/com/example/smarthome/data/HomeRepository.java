@@ -419,6 +419,7 @@ public class HomeRepository {
                 water.setValveOpen(valveOpen);
             }
 
+            water.setCloseThreshold(entity.getCloseThreshold());
             return water;
         }
         else{
@@ -1395,6 +1396,21 @@ public class HomeRepository {
             @Nullable final Boolean valveOpen,
             @NonNull final RepositoryCallback<WaterDevice> callback)
     {
+        updateWaterState(deviceId, online, waterLevel, temperature, levelStatus, lastUpdate,
+                         valveOpen, null, callback);
+    }
+
+    public void updateWaterState(
+            final int deviceId,
+            final boolean online,
+            @Nullable final Integer waterLevel,
+            @Nullable final Double temperature,
+            @Nullable final String levelStatus,
+            @Nullable final Long lastUpdate,
+            @Nullable final Boolean valveOpen,
+            @Nullable final Integer closeThreshold,
+            @NonNull final RepositoryCallback<WaterDevice> callback)
+    {
         if (callback == null)
         {
             throw new IllegalArgumentException(
@@ -1415,6 +1431,7 @@ public class HomeRepository {
                         levelStatus,
                         lastUpdate,
                         valveOpen,
+                        closeThreshold,
                         callback
                 );
             }
@@ -1429,6 +1446,7 @@ public class HomeRepository {
             @Nullable final String levelStatus,
             @Nullable final Long lastUpdate,
             @Nullable final Boolean valveOpen,
+            @Nullable final Integer closeThreshold,
             @NonNull final RepositoryCallback<WaterDevice> callback)
     {
         final WaterDevice updatedWater;
@@ -1497,6 +1515,13 @@ public class HomeRepository {
                                 entity.setLastUpdate(lastUpdate);
                             }
 
+                            if (closeThreshold != null) {
+                                entity.setCloseThreshold(closeThreshold);
+                                if (online && waterLevel == null) {
+                                    entity.setWaterLevel(null); entity.setTemperature(null);
+                                    entity.setLevelStatus(null); entity.setLastUpdate(null);
+                                }
+                            }
                             if (valveOpen != null)
                             {
                                 entity.setValveOpen(valveOpen);

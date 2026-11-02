@@ -77,6 +77,19 @@ final class Esp32TcpClient
         return state;
     }
 
+    Esp32Wire.Snapshot setValve(InetSocketAddress address, String id, boolean open) throws IOException {
+        Esp32Wire.Snapshot state = exchange(address, Esp32Wire.setValveRequest(id, open));
+        checkResponse(state, id, 2);
+        if (state.poweredOn != open) throw new IOException("Клапан не открылся: проверьте уровень и порог.");
+        return state;
+    }
+    Esp32Wire.Snapshot setWaterThreshold(InetSocketAddress address, String id, int threshold) throws IOException {
+        Esp32Wire.Snapshot state = exchange(address, Esp32Wire.setWaterThresholdRequest(id, threshold));
+        checkResponse(state, id, 2);
+        if (state.closeThreshold != threshold) throw new IOException("ESP не подтвердил порог закрытия.");
+        return state;
+    }
+
     private void checkResponse(Esp32Wire.Snapshot state, String controllerId, int type)
             throws IOException
     {

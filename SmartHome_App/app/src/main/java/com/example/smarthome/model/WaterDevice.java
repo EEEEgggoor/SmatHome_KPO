@@ -7,6 +7,15 @@ public class WaterDevice extends Device
     private Long lastUpdate;
     private String levelStatus;
     private Boolean valveOpen;
+    private Integer closeThreshold;
+    public Integer getCloseThreshold() { return closeThreshold; }
+    public void setCloseThreshold(Integer value) {
+        if (value != null && (value < 1 || value > 100)) throw new IllegalArgumentException("Порог: 1–100%.");
+        closeThreshold = value;
+    }
+    public void clearReading() {
+        waterLevel = null; temperature = null; lastUpdate = null; levelStatus = null;
+    }
 
     public WaterDevice(int id, String name, int roomId, String controllerId, boolean online){
         super(id, name,roomId,controllerId, online);

@@ -182,12 +182,13 @@ public final class Esp32ControllerGateway implements ControllerGateway {
                         else if (state.type == 1) {
                             callback.onRelayConnected(requestId, state.controllerId, state.poweredOn);
                         } else {
-                            if (state.value > 100) {
+                            if (state.value > 100 && state.value != 255) {
                                 callback.onError(requestId, new IOException("ESP32-S2 вернул неверный уровень воды."));
                                 return;
                             }
                             callback.onWaterConnected(requestId, state.controllerId,
-                                    state.value, null, null, null, null);
+                                    state.value <= 100 ? state.value : null, null, null, null,
+                                    state.closeThreshold > 0 ? state.poweredOn : null);
                         }
                     });
                 } catch (Exception error) {
@@ -333,8 +334,8 @@ public final class Esp32ControllerGateway implements ControllerGateway {
             WaterDevice result = new WaterDevice(old.getId(), old.getName(), old.getRoomId(),
                     old.getControllerId(), state.online);
             if (state.online) {
-                if (state.value > 100) throw new IOException("ESP32-S2 вернул неверный уровень воды.");
-                result.updateLevelOnly(state.value);
+                if (state.value <= 100) result.updateLevelOnly(state.value);
+                else result.clearReading();
             } else if (old.getWaterLevel() != null && old.getTemperature() == null) {
                 result.updateLevelOnly(old.getWaterLevel());
             } else if (old.getWaterLevel() != null && old.getTemperature() != null
@@ -342,7 +343,13 @@ public final class Esp32ControllerGateway implements ControllerGateway {
                 result.updateReading(old.getWaterLevel(), old.getTemperature(),
                         old.getLevelStatus(), old.getLastUpdate());
             }
-            if (old.getValveOpen() != null) result.setValveOpen(old.getValveOpen());
+            if (state.online && state.closeThreshold > 0) {
+                result.setValveOpen(state.poweredOn);
+                result.setCloseThreshold(state.closeThreshold);
+            } else {
+                if (old.getValveOpen() != null) result.setValveOpen(old.getValveOpen());
+                result.setCloseThreshold(old.getCloseThreshold());
+            }
             return result;
         }
         throw new IOException("Тип устройства не совпадает с ответом ESP32-S2.");
@@ -439,9 +446,32 @@ public final class Esp32ControllerGateway implements ControllerGateway {
     public void setValveOpen(long requestId, @NonNull WaterDevice device,
                              boolean valveOpen, @NonNull Callback<WaterDevice> callback)
     {
-        // WaterData.power_on не описывает положение клапана. Не выдаём его за подтверждение.
-        postError(requestId, device, callback,
-                new UnsupportedOperationException("Протокол управления клапаном ещё не определён."));
+        waterCommand(requestId, device, valveOpen, null, callback);
+    }
+
+    @Override public void setWaterThreshold(long requestId, @NonNull WaterDevice device, int threshold,
+                                             @NonNull Callback<WaterDevice> callback) {
+        waterCommand(requestId, device, null, threshold, callback);
+    }
+
+    private void waterCommand(long requestId, WaterDevice device, Boolean open, Integer threshold,
+                              Callback<WaterDevice> callback) {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(9);
+        io.execute(() -> {
+            synchronized (deviceLock(device.getControllerId())) {
+                try {
+                    InetSocketAddress address = addressFor(device.getControllerId());
+                    Esp32Wire.Snapshot state = threshold != null
+                        ? network.setWaterThreshold(address, device.getControllerId(), threshold, deadline)
+                        : network.setValve(address, device.getControllerId(), open, deadline);
+                    WaterDevice result = (WaterDevice) makeState(device, state);
+                    main.post(() -> callback.onSuccess(requestId, result));
+                } catch (Exception error) {
+                    knownAddresses.remove(device.getControllerId());
+                    postError(requestId, device, callback, error);
+                }
+            }
+        });
     }
 
     private <T extends Device> void postError(final long requestId, final T device,

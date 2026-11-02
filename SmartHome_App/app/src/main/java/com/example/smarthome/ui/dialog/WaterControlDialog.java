@@ -32,12 +32,28 @@ public class WaterControlDialog
          * Верните null, если запрос принят, иначе текст ошибки для показа в диалоге.
          */
         String onValveRequested(boolean open);
+        default String onThresholdRequested(int threshold) { return "Настройка порога недоступна."; }
     }
 
     private static final long REFRESH_PERIOD_MS = 5000L;
 
     private final Context context;
-    private final WaterDevice device;
+    private WaterDevice device;
+    private com.google.android.material.slider.Slider thresholdSlider;
+    private TextView thresholdValue;
+    private MaterialButton thresholdSave, valveOpenButton, valveCloseButton;
+    private boolean thresholdEdited;
+    private Integer pendingThreshold;
+    public void dismiss() { if (dialog != null) dialog.dismiss(); }
+    public void updateDevice(WaterDevice updated) {
+        if (updated.getId() != device.getId() || dialog == null || !dialog.isShowing()) return;
+        device = updated;
+        if (pendingThreshold != null && pendingThreshold.equals(device.getCloseThreshold())) {
+            thresholdEdited = false;
+            pendingThreshold = null;
+        }
+        showReadings();
+    }
     private final WaterControlListener listener;
     private final DeviceValueFormatter formatter;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -78,6 +94,25 @@ public class WaterControlDialog
         MaterialButton buttonValveOpen = contentView.findViewById(R.id.buttonValveOpen);
         MaterialButton buttonValveClose = contentView.findViewById(R.id.buttonValveClose);
 
+        valveOpenButton = buttonValveOpen;
+        valveCloseButton = buttonValveClose;
+        thresholdSlider = contentView.findViewById(R.id.sliderWaterThreshold);
+        thresholdValue = contentView.findViewById(R.id.textWaterThreshold);
+        thresholdSave = contentView.findViewById(R.id.buttonSaveWaterThreshold);
+        thresholdSlider.setValue(device.getCloseThreshold() == null ? 80 : device.getCloseThreshold());
+        thresholdSlider.addOnChangeListener((slider, value, fromUser) -> {
+            if (fromUser) thresholdEdited = true;
+            thresholdValue.setText(context.getString(R.string.water_threshold_draft, (int) value));
+        });
+        thresholdSave.setOnClickListener(view -> {
+            String error = listener.onThresholdRequested((int) thresholdSlider.getValue());
+            if (error != null) { textError.setText(error); textError.setVisibility(View.VISIBLE); }
+            else {
+                pendingThreshold = (int) thresholdSlider.getValue();
+                thresholdEdited = true;
+                textError.setVisibility(View.GONE);
+            }
+        });
         showReadings();
 
         // Без связи показания остаются последними известными, но клапаном управлять нельзя.
@@ -131,7 +166,7 @@ public class WaterControlDialog
         String errorText = listener.onValveRequested(open);
         if (errorText == null)
         {
-            dialog.dismiss();
+            // Stay open: the next confirmed snapshot updates the displayed valve state.
         }
         else
         {
@@ -143,6 +178,20 @@ public class WaterControlDialog
     // Читает показания из модели и выводит их. Отсутствие данных не превращается в 0.
     private void showReadings()
     {
+        if (thresholdSlider != null) {
+            if (!thresholdEdited && device.getCloseThreshold() != null) thresholdSlider.setValue(device.getCloseThreshold());
+            thresholdValue.setText(thresholdEdited
+                ? context.getString(R.string.water_threshold_draft, (int) thresholdSlider.getValue())
+                : device.getCloseThreshold() == null
+                    ? context.getString(R.string.water_threshold_unknown)
+                    : context.getString(R.string.water_threshold_confirmed, device.getCloseThreshold()));
+            thresholdSlider.setEnabled(device.isOnline());
+            thresholdSave.setEnabled(device.isOnline());
+            valveCloseButton.setEnabled(device.isOnline());
+            Integer limit = device.getCloseThreshold(), level = device.getWaterLevel();
+            valveOpenButton.setEnabled(device.isOnline() && level != null && limit != null
+                && level <= limit - (limit > 5 ? 5 : 1));
+        }
         Integer waterLevel = device.getWaterLevel();
         textWaterLevel.setText(formatter.formatWaterLevel(waterLevel));
         if (waterLevel == null)

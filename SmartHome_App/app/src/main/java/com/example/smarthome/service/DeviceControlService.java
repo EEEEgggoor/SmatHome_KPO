@@ -196,6 +196,15 @@ public class DeviceControlService
         new WaterRequest(snapshot, valveOpen, callback).start();
     }
 
+    @MainThread public void setWaterThreshold(@NonNull WaterDevice device, int threshold,
+                                              @NonNull Callback<WaterDevice> callback) {
+        if (!checkRequest(device, callback)) return;
+        if (threshold < 1 || threshold > 100) {
+            postError(callback, new IllegalArgumentException("Порог: 1–100%.")); return;
+        }
+        new WaterThresholdRequest(copyWaterDevice(device), threshold, callback).start();
+    }
+
     /** Сохранённое offline не запрещает попытку опроса. */
     @MainThread
     public void readDeviceState(@NonNull Device device, @NonNull Callback<Device> callback)
@@ -248,6 +257,7 @@ public class DeviceControlService
         {
             result.setValveOpen(source.getValveOpen());
         }
+        result.setCloseThreshold(source.getCloseThreshold());
         return result;
     }
 
@@ -583,6 +593,21 @@ public class DeviceControlService
         }
     }
 
+    private class WaterThresholdRequest extends DeviceRequest<WaterDevice> {
+        private final int threshold;
+        WaterThresholdRequest(WaterDevice device, int threshold, Callback<WaterDevice> callback) {
+            super(device, callback); this.threshold = threshold;
+        }
+        @Override void send() { gateway.setWaterThreshold(requestId, copyWaterDevice(device), threshold, this); }
+        @Override WaterDevice validate(WaterDevice response) {
+            if (!response.isOnline() || response.getCloseThreshold() == null
+                    || response.getCloseThreshold() != threshold)
+                throw new IllegalStateException("Контроллер не подтвердил порог.");
+            return copyWaterDevice(response);
+        }
+        @Override WaterDevice savedResult(Device result) { return (WaterDevice) result; }
+    }
+
     private class ReadRequest extends DeviceRequest<Device>
     {
         ReadRequest(Device device, Callback<Device> callback)
@@ -716,7 +741,7 @@ public class DeviceControlService
                 time = null;
             }
             repository.updateWaterState(water.getId(), true, level, temperature,
-                    status, time, water.getValveOpen(), this.<WaterDevice>forwardResult(callback));
+                    status, time, water.getValveOpen(), water.getCloseThreshold(), this.<WaterDevice>forwardResult(callback));
         }
         else
         {
