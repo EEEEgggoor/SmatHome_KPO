@@ -14,22 +14,24 @@ import com.example.smarthome.model.LightDevice;
 import com.example.smarthome.presentation.DeviceValueFormatter;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.google.android.material.slider.Slider;
 
 /**
  * Управление светом: включение и яркость 0–100.
- * Значения в диалоге — черновик. Они применяются только по «Сохранить», «Отмена» ничего не меняет.
- * Диалог сам модель не меняет и оборудованию ничего не отправляет: он передаёт запрос слушателю.
+ * Значения в диалоге — черновик, применяются по «Сохранить».
+ * После «Сохранить» показывается ожидание, повторное применение заблокировано.
+ * Диалог закрывается только когда слушатель сообщил об успехе через ControlResultCallback.
+ * Модель диалог не меняет и оборудованию ничего не отправляет сам.
  */
 public class LightControlDialog
 {
     public interface LightControlListener
     {
         /**
-         * Вызывается при нажатии «Сохранить».
-         * Верните null, если запрос принят, иначе текст ошибки для показа в диалоге.
+         * Вызывается при нажатии «Сохранить». Результат нужно сообщить через result.
          */
-        String onLightApplyRequested(boolean poweredOn, int brightness);
+        void onLightApplyRequested(boolean poweredOn, int brightness, ControlResultCallback result);
     }
 
     private final Context context;
@@ -41,7 +43,11 @@ public class LightControlDialog
     private Slider sliderBrightness;
     private TextView textBrightnessValue;
     private TextView textError;
+    private LinearProgressIndicator progressControl;
+    private Button saveButton;
     private AlertDialog dialog;
+    private boolean online;
+    private boolean closed;
 
     public LightControlDialog(Context context, LightDevice device, LightControlListener listener)
     {
@@ -62,6 +68,7 @@ public class LightControlDialog
         sliderBrightness = contentView.findViewById(R.id.sliderBrightness);
         textBrightnessValue = contentView.findViewById(R.id.textBrightnessValue);
         textError = contentView.findViewById(R.id.textControlError);
+        progressControl = contentView.findViewById(R.id.progressControl);
         TextView textNotice = contentView.findViewById(R.id.textControlNotice);
 
         // Начальный черновик равен текущему состоянию устройства.
@@ -77,8 +84,9 @@ public class LightControlDialog
                 showBrightnessValue((int) value);
             }
         });
+
         // Без связи последнее состояние остаётся на экране, но изменить его нельзя.
-        final boolean online = device.isOnline();
+        online = device.isOnline();
         if (!online)
         {
             textNotice.setVisibility(View.VISIBLE);
@@ -99,7 +107,7 @@ public class LightControlDialog
             @Override
             public void onShow(DialogInterface dialogInterface)
             {
-                Button saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
                 saveButton.setEnabled(online);
                 saveButton.setOnClickListener(new View.OnClickListener()
                 {
@@ -112,31 +120,73 @@ public class LightControlDialog
             }
         });
 
+        // Результат команды, пришедший после закрытия диалога, игнорируем.
+        dialog.setOnDismissListener(new DialogInterface.OnDismissListener()
+        {
+            @Override
+            public void onDismiss(DialogInterface dialogInterface)
+            {
+                closed = true;
+            }
+        });
+
         dialog.show();
     }
 
     private void applyDraft()
     {
         textError.setVisibility(View.GONE);
+        setPending(true);
 
         boolean poweredOn = switchPower.isChecked();
         int brightness = (int) sliderBrightness.getValue();
 
-        String errorText = listener.onLightApplyRequested(poweredOn, brightness);
-        if (errorText == null)
+        listener.onLightApplyRequested(poweredOn, brightness, new ControlResultCallback()
         {
-            dialog.dismiss();
+            @Override
+            public void onSuccess()
+            {
+                if (closed)
+                {
+                    return;
+                }
+                dialog.dismiss();
+            }
+
+            @Override
+            public void onFailure(String message)
+            {
+                if (closed)
+                {
+                    return;
+                }
+                setPending(false);
+                textError.setText(message);
+                textError.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    // Пока команда выполняется, элементы управления и «Сохранить» недоступны.
+    private void setPending(boolean pending)
+    {
+        if (pending)
+        {
+            progressControl.setVisibility(View.VISIBLE);
         }
         else
         {
-            textError.setText(errorText);
-            textError.setVisibility(View.VISIBLE);
+            progressControl.setVisibility(View.GONE);
         }
+
+        boolean editable = online && !pending;
+        switchPower.setEnabled(editable);
+        sliderBrightness.setEnabled(editable);
+        saveButton.setEnabled(editable);
     }
 
     private void showBrightnessValue(int brightness)
     {
         textBrightnessValue.setText(formatter.formatBrightness(brightness));
     }
-
 }
