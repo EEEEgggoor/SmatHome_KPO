@@ -21,7 +21,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator;
  * Датчик воды: показания только для чтения и ручное управление клапаном.
  * Состояние клапана может быть неизвестно (null), поэтому вместо переключателя
  * две кнопки «Открыть» и «Закрыть»: так не создаётся впечатление подтверждённого положения.
- * Пока диалог открыт, время измерения обновляется раз в несколько секунд.
+ * Пока диалог открыт, доступность кнопок пересчитывается раз в несколько секунд.
  */
 public class WaterControlDialog
 {
@@ -45,6 +45,7 @@ public class WaterControlDialog
     private boolean thresholdEdited;
     private Integer pendingThreshold;
     public void dismiss() { if (dialog != null) dialog.dismiss(); }
+    public boolean isShowing() { return dialog != null && dialog.isShowing(); }
     public void updateDevice(WaterDevice updated) {
         if (updated.getId() != device.getId() || dialog == null || !dialog.isShowing()) return;
         device = updated;
@@ -62,8 +63,6 @@ public class WaterControlDialog
     private LinearProgressIndicator progressWaterLevel;
     private TextView textWaterLevel;
     private TextView textWaterStatus;
-    private TextView textWaterTemperature;
-    private TextView textWaterUpdated;
     private TextView textValveState;
     private TextView textError;
     private AlertDialog dialog;
@@ -86,8 +85,6 @@ public class WaterControlDialog
         progressWaterLevel = contentView.findViewById(R.id.progressWaterLevel);
         textWaterLevel = contentView.findViewById(R.id.textWaterLevel);
         textWaterStatus = contentView.findViewById(R.id.textWaterStatus);
-        textWaterTemperature = contentView.findViewById(R.id.textWaterTemperature);
-        textWaterUpdated = contentView.findViewById(R.id.textWaterUpdated);
         textValveState = contentView.findViewById(R.id.textValveState);
         textError = contentView.findViewById(R.id.textControlError);
         TextView textNotice = contentView.findViewById(R.id.textControlNotice);
@@ -205,8 +202,6 @@ public class WaterControlDialog
         }
 
         textWaterStatus.setText(formatter.formatLevelStatus(device.getLevelStatus()));
-        textWaterTemperature.setText(formatter.formatTemperature(device.getTemperature()));
-        textWaterUpdated.setText(formatter.formatLastUpdate(device.getLastUpdate()));
 
         String valveText = formatter.formatValveState(device.getValveOpen());
         textValveState.setText(context.getString(R.string.haven_valve_state, valveText));

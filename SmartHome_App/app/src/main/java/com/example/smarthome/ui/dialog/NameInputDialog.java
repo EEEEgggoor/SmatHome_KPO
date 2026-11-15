@@ -5,6 +5,7 @@ import android.content.DialogInterface;
 import android.text.InputFilter;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 
@@ -20,6 +21,7 @@ import com.google.android.material.textfield.TextInputLayout;
  * Сам название не проверяет и не сохраняет: он передаёт введённый текст слушателю.
  * Пока слушатель не сообщил результат, кнопка и поле недоступны.
  * При успехе диалог закрывается, при ошибке остаётся открытым и показывает её текст.
+ * Возвращает созданный диалог, чтобы экран мог закрыть его при уходе (поворот, сворачивание).
  */
 public class NameInputDialog
 {
@@ -34,7 +36,7 @@ public class NameInputDialog
     /**
      * @param maxLength ограничение длины; 0 или меньше — без ограничения
      */
-    public static void show(Context context, int titleResId, int hintResId, String initialName,
+    public static AlertDialog show(Context context, int titleResId, int hintResId, String initialName,
                             int maxLength, int positiveButtonResId, final NameListener listener)
     {
         if (context == null || listener == null)
@@ -69,7 +71,11 @@ public class NameInputDialog
         builder.setNegativeButton(R.string.haven_cancel, null);
 
         final AlertDialog dialog = builder.create();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        Window window = dialog.getWindow();
+        if (window != null)
+        {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        }
 
         // Результат, пришедший после закрытия диалога, игнорируем.
         final boolean[] closed = new boolean[1];
@@ -136,5 +142,6 @@ public class NameInputDialog
         });
 
         dialog.show();
+        return dialog;
     }
 }

@@ -115,6 +115,21 @@ public class RelayControlDialog
         dialog.show();
     }
 
+    /** Открыт ли диалог сейчас. */
+    public boolean isShowing()
+    {
+        return dialog != null && dialog.isShowing();
+    }
+
+    /** Закрывает диалог; результат команды, пришедший позже, игнорируется. */
+    public void dismiss()
+    {
+        if (dialog != null && dialog.isShowing())
+        {
+            dialog.dismiss();
+        }
+    }
+
     private void applyDraft()
     {
         textError.setVisibility(View.GONE);

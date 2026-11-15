@@ -50,12 +50,10 @@
     <string name="haven_relay_current_state">Сейчас: %1$s</string>
     <string name="haven_water_level">Уровень воды</string>
     <string name="haven_water_status">Статус уровня</string>
-    <string name="haven_water_temperature">Температура</string>
-    <string name="haven_water_updated">Обновлено</string>
     <string name="haven_valve_title">Клапан</string>
     <string name="haven_valve_state">Состояние: %1$s</string>
     <string name="haven_valve_open">Открыть</string>
-    <string name="haven_valve_close">Закрыть клапан</string>
+    <string name="haven_valve_close">Закрыть</string>
     <string name="esp_add_title">Подключить ESP32-S2</string>
     <string name="esp_connect_hint">Укажите название и комнату. Телефон должен быть в той же Wi-Fi сети, что и ESP32-S2.</string>
     <string name="esp_wifi_scan_title">Уже подключены к Wi-Fi</string>
